@@ -10,16 +10,9 @@ extern "C" {
 
 #include <byteswap.h>
 
-#ifdef DECAF_LINUX_VMI
-#include "DECAF_linux_vmi.h"
-#include "DroidScope/DS_Init.h"
-#include "DroidScope/LinuxAPI.h"
-#endif
-
 #include "panda_plugin.h"
 #include "syscallents.h"
 
-extern gva_t taskaddr;
 extern int task_struct_tasks_offset;
 extern int task_struct_pid_offset;
 extern int task_struct_stack_offset;
@@ -226,79 +219,7 @@ static inline unsigned int decompose_from_mem(CPUState *env, target_ulong mloc, 
 
 
 void process_info(CPUState *env, target_ulong pc) {
-    int readret = 0;
-    int readErrors = 0;
-    uint32_t THREADINFO = 0;
-    uint32_t THREADINFO2 = 0;
-    uint32_t THREADINFO3 = 0;
-    uint32_t TASKSTRUCT = 0;
-    uint32_t TASKSTRUCTsw = 0;
-    uint32_t TScur;
-    int i;
-
     if (in_kernelspace(env)) {                                                                                  
-	readErrors = 0;
-	THREADINFO = THREADINFO2 = THREADINFO3 = TASKSTRUCT = TASKSTRUCTsw = 0;
-
-	PTLOG("------------------------------------------");
-	PTLOG("target_ulong size: %lu", sizeof(target_ulong));
-	PTLOG("esp: %x", env->regs[R_ESP]);
-
-	THREADINFO = (env->regs[R_ESP]) & ~8191;
-
-	readret = panda_virtual_memory_rw(env, THREADINFO, (uint8_t *)&TASKSTRUCT, sizeof(uint32_t), 0);
-	readErrors += readret == 0 ? 0 : 1;
-
-	TASKSTRUCTsw = __bswap_32(TASKSTRUCT);
-
-	readret = panda_virtual_memory_rw(env, TASKSTRUCT+task_struct_stack_offset, (uint8_t *)&THREADINFO2, sizeof(uint32_t), 0);
-	readErrors += readret == 0 ? 0 : 1;
-
-	readret = panda_virtual_memory_rw(env, TASKSTRUCTsw+task_struct_stack_offset, (uint8_t *)&THREADINFO3, sizeof(uint32_t), 0);
-	readErrors += readret == 0 ? 0 : 1;
-
-	PTLOG("thread_info:%x/%x/%x task_struct:%x task_struct(sw):%x errors:%d", 
-	    THREADINFO, THREADINFO2, THREADINFO3,
-	    TASKSTRUCT, TASKSTRUCTsw, readErrors
-	);
-		
-	TScur = taskaddr;
-	for(i=0; (i==0 || TScur!=taskaddr); i++) {
-	    uint32_t tpid = 0;
-	    uint32_t TSnxt = 0;
-	    uint32_t TSstack = 0;
-	    uint32_t TSmm = 0;
-	    uint32_t TScur2 = 0;
-	    uint32_t PGDcur = 0;
-
-	    readret = panda_virtual_memory_rw(env, TScur+task_struct_pid_offset, (uint8_t *)&tpid, sizeof(uint32_t), 0);
-	    readErrors += readret == 0 ? 0 : 1;
-
-	    readret = panda_virtual_memory_rw(env, TScur+task_struct_stack_offset, (uint8_t *)&TSstack, sizeof(uint32_t), 0);
-	    readErrors += readret == 0 ? 0 : 1;
-
-	    readret = panda_virtual_memory_rw(env, TSstack, (uint8_t *)&TScur2, sizeof(uint32_t), 0);
-	    readErrors += readret == 0 ? 0 : 1;
-
-	    readret = panda_virtual_memory_rw(env, TScur+task_struct_mm_offset, (uint8_t *)&TSmm, sizeof(uint32_t), 0);
-	    readErrors += readret == 0 ? 0 : 1;
-
-	    if (TSmm != 0) {
-		readret = panda_virtual_memory_rw(env, TSmm+mm_struct_pgd_offset, (uint8_t *)&PGDcur, sizeof(uint32_t), 0);
-		readErrors += readret == 0 ? 0 : 1;
-	    }
-
-	    readret = panda_virtual_memory_rw(env, TScur+task_struct_tasks_offset, (uint8_t *)&TSnxt, sizeof(uint32_t), 0);
-	    readErrors += readret == 0 ? 0 : 1;
-	    TSnxt -= task_struct_tasks_offset;
-
-	    PTLOG("PS%02d(%d): TS%c:%x/%x STK:%x PGD:%x MM:%x pid:%d)", i, readErrors,
-		TScur == TScur2 ? '-' : '*', TScur, TScur2, TSstack, PGDcur, TSmm, tpid
-	    );
-
-	    TScur = TSnxt;
-	}
-	PTLOG("------------------------------------------");
     }
     else {
 	PTLOG("L8R");
@@ -407,28 +328,9 @@ int ins_exec_callback(CPUState *env, target_ulong pc) {
             {
                 if (ins->ops[0].type == O_REG && ins->ops[0].index == distorm::R_CR3 ) {
 		    PTLOG("");
-		    PTLOG("CR3:%x", env->cr[3]);
+		    PTLOG("CR3=" TARGET_FMT_lx, env->cr[3]);
 		    process_info(env, pc);
 
-		    /*
-		    static char procname[PROCNAME_LEN];
-		    gva_t p = DECAF_get_current_process(env);
-		    gva_t p2=0;
-                    int ror = panda_virtual_memory_rw(env, p, (uint8_t *)&p2, sizeof(p2), 0);
-		    gpid_t pid = DECAF_get_pid(env, p);
-		    strncpy(procname, "N/A", PROCNAME_LEN);
-		    DECAF_get_name(env, p, procname, PROCNAME_LEN);
-		    PTLOG("DECAF ProcessInfo:%d/" FMT_GVA_T "/" FMT_GVA_T " Process:%s Pid:" FMT_GPID_T, ror, p2, p, procname, pid);
-		    PTLOG_FLUSH;
-		    */
-		/*
-                    fprintf(ptout, "@%05u %s %5u(%s) CR3=" TARGET_FMT_plx " PC=" TARGET_FMT_plx " %s\n",
-                        ts, in_kernelspace(env) ? "K" : "U",
-                        (unsigned int)pid, procname,
-                        (long unsigned int)env->cr[3], (long unsigned int)pc, "CR3 Updated"
-                    );
-		*/
-		    //printProcessList(ptout);
                 }
 		else { PTLOG("OTHER"); }
 	    }
@@ -496,14 +398,6 @@ bool init_plugin(void *self) {
     ptout = fopen(PROV_TRACER_DEFAULT_OUT, "w");    
     if(ptout == NULL) return false;
 
-#ifdef DECAF_LINUX_VMI
-    PTLOG("Initializing DECAF.");
-    PTLOG_FLUSH;
-    DS_init();
-    PTLOG("Initializing DECAF, done.");
-    PTLOG_FLUSH;
-#endif
-
     // set Distorm decode mode
     if (strstr(guest_os, "64")) { distorm_dt = Decode64Bits; }
     else { distorm_dt = Decode64Bits; }
@@ -533,10 +427,6 @@ bool init_plugin(void *self) {
 void uninit_plugin(void *self) {
 #if defined(TARGET_I386)
     int n;
-
-#ifdef DECAF_LINUX_VMI
-    DS_close();
-#endif
 
     ERRNO_CLEAR;
     n = dlclose(syscalls_dl);
