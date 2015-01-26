@@ -85,17 +85,40 @@ sudo cp * /usr/local/include
 cd -
 ```
 
+### Protocol buffers C style
+
+Protocol buffers are used by pandalog.  You want it.
+This is how I built things and installed them.
+
+```
+cd ~/software
+git clone https://github.com/google/protobuf.git
+cd protobuf
+sh ./autogen.sh
+./configure --disable-shared
+make
+make install
+
+cd ~/software
+git clone https://github.com/protobuf-c/protobuf-c.git
+cd protobuf-c
+sh ./autogen.sh
+./configure --disable-shared
+make
+make install
+```
+
 ## Building the QEMU part
 After successfully installing all the prerequisites, you can go
 on and build the QEMU part of PANDA.
 
-By default, `build.sh` will attempt to use the debug build of
-LLVM. You can override this by setting the `PANDA_LLVM_BUILD`
-environment variable. E.g. to you use the release build
-(faster), run:
+By default, `build.sh` will attempt to use the release build of
+LLVM (faster).
+You can override this by setting the `PANDA_LLVM_BUILD`
+environment variable. E.g. to you use the debug build run:
 
 ```
-export PANDA_LLVM_BUILD=Release
+export PANDA_LLVM_BUILD=Debug+Asserts
 ```
 
 After making sure that the proper LLVM build will be used,
