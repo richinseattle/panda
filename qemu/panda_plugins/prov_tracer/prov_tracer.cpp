@@ -178,12 +178,7 @@ bool ins_translate_callback(CPUState *env, PTR pc) {
             return true;
 
         default:
-            if (ins->ops[0].type == O_REG && ins->ops[0].index == distorm::R_CR3 ) {
-                return true;
-	    }
-            else {
-                return false;
-	    }
+	    return false;
     }
 #else
     // have the function compiled, although initialization should fail earlier.
@@ -250,19 +245,7 @@ int ins_exec_callback(CPUState *env, PTR pc) {
 
             default:
             {
-                if (ins->ops[0].type == O_REG && ins->ops[0].index == distorm::R_CR3 ) {
-		    LOG_INFO("PGD Update (%s): " PTR_FMT, _CPU_MODE, _PGD);
-		    if (_IN_KERNEL) {                                                                                  
-			OsiProc *proc = get_current_process(env);
-			LOG_INFO("*+ Current process: %s, PID:" PID_FMT ", PPID:" PID_FMT,
-			    proc->name, (int)proc->pid, (int)proc->ppid
-			);
-		    }
-		    else {
-			LOG_INFO("WTF1");
-		    }
-		}
-		else { LOG_INFO("Unexpected instrumented instruction."); }
+		LOG_WARN("Unexpected instrumented instruction.");
 	    }
             break;
         }
@@ -277,9 +260,10 @@ int ins_exec_callback(CPUState *env, PTR pc) {
 }
 
 int vmi_pgd_changed(CPUState *env, target_ulong oldval, target_ulong newval) {
+    LOG_INFO("PGD Update (%s): " PTR_FMT " " PTR_FMT, _CPU_MODE, oldval, newval);
     if (_IN_KERNEL) {	// this check is redundant - PGD only changed in kernel mode
 	OsiProc *proc = get_current_process(env);
-	LOG_INFO("*- Current process: %s, PID:" PID_FMT ", PPID:" PID_FMT,
+	LOG_INFO("Current process: %s, PID:" PID_FMT ", PPID:" PID_FMT,
 	    proc->name, (int)proc->pid, (int)proc->ppid
 	);
     }
