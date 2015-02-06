@@ -7,9 +7,11 @@ extern "C" {
 #include "cpu.h"
 
 #include "panda_plugin.h"
+#include "panda_plugin_plugin.h"
+#include "../osi/osi_types.h"		/**< Introspection data types. */
+#include "../osi/osi_ext.h"		/**< Introspection API. */
+#include "../osi/os_intro.h"		/**< Introspection callbacks. */
 #include "syscallents.h"
-#include "../osi/osi_types.h"
-#include "../osi/osi_ext.h"
 
 #include <stdio.h>
 #include <glib.h>
@@ -29,11 +31,12 @@ extern "C" {
 extern "C" {
 bool init_plugin(void *);
 void uninit_plugin(void *);
+void on_new_process(CPUState *, OsiProc *);
 }
 
 
 void *syscalls_dl;                      /**< DL handle for syscalls table. */
-struct syscall_entry *syscalls;         /**< Syscalls table. */
+struct syscall_entry *syscalls;		/**< Syscalls table. */
 
 
 
@@ -281,6 +284,11 @@ int before_block_exec_cb(CPUState *env, TranslationBlock *tb) {
 }
 
 
+void on_new_process(CPUState *env, OsiProc *p) {
+    LOG_INFO("NEWPROC");
+}
+
+
 bool init_plugin(void *self) {
     // retrieve plugin arguments
     panda_arg_list *plugin_args = panda_get_args(PLUGIN_NAME);
@@ -326,6 +334,8 @@ bool init_plugin(void *self) {
 
     pcb.after_PGD_write = vmi_pgd_changed;
     panda_register_callback(self, PANDA_CB_VMI_PGD_CHANGED, pcb);
+
+    PPP_REG_CB("osi", on_new_process, on_new_process);
 
     return true;
 #else

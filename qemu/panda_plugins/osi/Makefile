@@ -10,10 +10,11 @@ include ../panda.mak
 # If you need custom CFLAGS or LIBS, set them up here
 # CFLAGS+=
 # LIBS+=
+CXXFLAGS+=-std=c++11
 
 # The main rule for your plugin. Please stick with the panda_ naming
 # convention.
-$(PLUGIN_TARGET_DIR)/panda_$(PLUGIN_NAME).so: $(PLUGIN_TARGET_DIR)/os_intro.o
+$(PLUGIN_TARGET_DIR)/panda_$(PLUGIN_NAME).so: $(PLUGIN_TARGET_DIR)/os_intro.o $(PLUGIN_TARGET_DIR)/osi_proc_events.o
 	$(call quiet-command,$(CC) $(QEMU_CFLAGS) -shared -o $@ $^ $(LIBS),"  PLUGIN  $@")
 
 all: $(PLUGIN_TARGET_DIR)/panda_$(PLUGIN_NAME).so

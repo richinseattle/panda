@@ -24,9 +24,16 @@ PANDAENDCOMMENT */
 #include "osi_types.h"
 #include "osi_int.h"
 #include "os_intro.h"
+#ifdef OSI_PROC_EVENTS
+#include <glib.h>
+#include "osi_proc_events.h"
+#endif
 
 bool init_plugin(void *);
 void uninit_plugin(void *);
+#ifdef OSI_PROC_EVENTS
+int vmi_pgd_changed(CPUState *, target_ulong, target_ulong);
+#endif
 
 PPP_PROT_REG_CB(on_get_processes)
 PPP_PROT_REG_CB(on_get_current_process)
@@ -35,6 +42,9 @@ PPP_PROT_REG_CB(on_get_libraries)
 PPP_PROT_REG_CB(on_free_osiproc)
 PPP_PROT_REG_CB(on_free_osiprocs)
 PPP_PROT_REG_CB(on_free_osimodules)
+#ifdef OSI_PROC_EVENTS
+PPP_PROT_REG_CB(on_new_process)
+#endif
 
 PPP_CB_BOILERPLATE(on_get_processes)
 PPP_CB_BOILERPLATE(on_get_current_process)
@@ -43,6 +53,9 @@ PPP_CB_BOILERPLATE(on_get_libraries)
 PPP_CB_BOILERPLATE(on_free_osiproc)
 PPP_CB_BOILERPLATE(on_free_osiprocs)
 PPP_CB_BOILERPLATE(on_free_osimodules)
+#ifdef OSI_PROC_EVENTS
+PPP_CB_BOILERPLATE(on_new_process)
+#endif
 
 // The copious use of pointers to pointers in this file is due to
 // the fact that PPP doesn't support return values (since it assumes
@@ -84,7 +97,30 @@ void free_osimodules(OsiModules *ms) {
     PPP_RUN_CB(on_free_osimodules, ms);
 }
 
+#ifdef OSI_PROC_EVENTS
+int vmi_pgd_changed(CPUState *env, target_ulong oldval, target_ulong newval) {
+    OsiProcs *ps = NULL;
+    OsiProc *p = NULL;
+
+    /* update process state */
+    ps = get_processes(env);
+    procstate_update(ps);
+
+    /* only free the top ps structure */
+    //g_free(ps);
+
+
+    PPP_RUN_CB(on_new_process, env, p);
+    return 0;
+}
+#endif
+
 bool init_plugin(void *self) {
+#ifdef OSI_PROC_EVENTS
+    panda_cb pcb;
+    pcb.after_PGD_write = vmi_pgd_changed;
+    panda_register_callback(self, PANDA_CB_VMI_PGD_CHANGED, pcb);
+#endif
     return true;
 }
 
