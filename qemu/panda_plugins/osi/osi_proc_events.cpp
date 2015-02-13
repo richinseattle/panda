@@ -1,7 +1,10 @@
 #include "osi_proc_events.h"
 
-#include <string.h>
+extern "C" {
 #include <osi_int.h>
+}
+
+#include <string.h>
 #include <algorithm>
 #include <iterator>
 #include <set>
@@ -10,10 +13,10 @@
 /*! @brief The global process state. */
 ProcState pstate;
 
-
 /*! @brief Constructor. */
 ProcState::ProcState(void) {
-	// nothing
+	this->pid_set = new PidSet();
+	this->proc_map = new ProcMap();
 	return;
 }
 
@@ -21,13 +24,17 @@ ProcState::ProcState(void) {
 ProcState::~ProcState(void) {
 	if (this->pid_set != NULL) delete this->pid_set;
 	if (this->proc_map != NULL) delete this->proc_map;
+	free_osiprocs(this->ps);
 }
 
 /*! @brief Gets a subset of the processes in `ProcMap`. */
 OsiProcs *ProcState::OsiProcsSubset(ProcMap *m, PidSet *s) {
 	int notfound = 0;
 	OsiProcs *ps = (OsiProcs *)g_malloc0(sizeof(OsiProcs));
-	ps->proc = g_new(OsiProc, s->size());
+
+	// ProcState::OsiProcCopy attempts to free OsiProc members.
+	// ps->proc array must be zeroed-out to avoid this.
+	ps->proc = g_new0(OsiProc, s->size());
 
 	for (auto it=s->begin(); it!=s->end(); ++it) {
 		auto p_it = m->find(*it);
@@ -65,6 +72,13 @@ error:
 	return NULL;
 }
 
+/*! @brief Updates the ProcState with the new process set.
+ * If `in` and `out` are not NULL, the new and finished processes
+ * will be returned through them.
+ * 
+ * @note For efficiency, the passed `ps` becomes part of the
+ * ProcState and must not be freed by the caller.
+ */
 void ProcState::update(OsiProcs *ps, OsiProcs **in, OsiProcs **out){
 	PidSet *pid_set_new = new PidSet();
 	ProcMap *proc_map_new = new ProcMap();
@@ -84,7 +98,7 @@ void ProcState::update(OsiProcs *ps, OsiProcs **in, OsiProcs **out){
 	}
 
 	// extract OsiProcs
-	if (in != NULL && out != NULL) {
+	if (likely(in != NULL && out != NULL)) {
 		// free old data
 		if (*in != NULL) free_osiprocs(*in);
 		if (*out != NULL) free_osiprocs(*out);
@@ -106,13 +120,21 @@ void ProcState::update(OsiProcs *ps, OsiProcs **in, OsiProcs **out){
 		*out = ProcState::OsiProcsSubset(this->proc_map, &pid_out);
 	}
 
-	// update
+	// update ProcState
+	delete this->pid_set;
+	delete this->proc_map;
+	free_osiprocs(this->ps);
+	this->pid_set = pid_set_new;
+	this->proc_map = proc_map_new;
+	this->ps = ps;
 
 	return;
 }
 
-void procstate_update(OsiProcs *ps) {
-	pstate.update(ps, NULL, NULL);
+/*!
+ * @brief C wrapper for updating the global process state.
+ */
+void procstate_update(OsiProcs *ps, OsiProcs **in, OsiProcs **out) {
+	pstate.update(ps, in, out);
 }
-
 

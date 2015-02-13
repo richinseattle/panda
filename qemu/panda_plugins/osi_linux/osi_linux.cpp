@@ -132,7 +132,8 @@ static void fill_osimodule(CPUState *env, OsiModule *m, PTR vma_addr) {
 void on_get_current_process(CPUState *env, OsiProc **out_p) {
     OsiProc *p;
     PTR ts;
-    
+
+    printf("NNNNNNNNNNNNNNNNNNNNNNNNNNNNNNNNNNNNNNNNNNN\n");
     p = (OsiProc *)g_malloc0(sizeof(OsiProc));
     ts = get_task_struct(env, (_ESP & THREADINFO_MASK));
     fill_osiproc(env, p, ts);

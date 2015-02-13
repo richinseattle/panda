@@ -29,15 +29,14 @@ class ProcState {
 	public:
 		ProcState();
 		~ProcState();
-		void update(OsiProcs *ps);
 		void update(OsiProcs *ps, OsiProcs **in, OsiProcs **out);
 
 	private:
-		PidSet *pid_set = NULL;
-		ProcMap *proc_map = NULL;
+		PidSet *pid_set = NULL;		/**< pids from previous run */
+		ProcMap *proc_map = NULL;	/**< pid to OsiProc* map */
+		OsiProcs *ps = NULL;		/**< the actual OsiProc structs pointed to by proc_map are contained here */
 		static OsiProcs *OsiProcsSubset(ProcMap *, PidSet *);
 		static OsiProc *OsiProcCopy(OsiProc *from, OsiProc *to);
-	
 };
 #else
 typedef struct ProcState ProcState;
@@ -54,7 +53,8 @@ extern ProcState pstate;
 /*!
  * @brief C wrapper for updating the global process state.
  */
-void procstate_update(OsiProcs *);
+void procstate_update(OsiProcs *ps, OsiProcs **in, OsiProcs **out);
+
 #ifdef __cplusplus
 }
 #endif

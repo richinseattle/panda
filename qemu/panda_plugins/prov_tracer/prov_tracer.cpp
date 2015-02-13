@@ -266,6 +266,7 @@ int vmi_pgd_changed(CPUState *env, target_ulong oldval, target_ulong newval) {
     LOG_INFO("PGD Update (%s): " PTR_FMT " " PTR_FMT, _CPU_MODE, oldval, newval);
     if (_IN_KERNEL) {	// this check is redundant - PGD only changed in kernel mode
 	OsiProc *proc = get_current_process(env);
+	LOG_INFO("LOL");
 	LOG_INFO("Current process: %s, PID:" PID_FMT ", PPID:" PID_FMT,
 	    proc->name, (int)proc->pid, (int)proc->ppid
 	);
@@ -285,9 +286,12 @@ int before_block_exec_cb(CPUState *env, TranslationBlock *tb) {
 
 
 void on_new_process(CPUState *env, OsiProc *p) {
-    LOG_INFO("NEWPROC");
+    LOG_INFO("NEW: %s", p->name);
 }
 
+void on_finished_process(CPUState *env, OsiProc *p) {
+    LOG_INFO("FINISHED: %s", p->name);
+}
 
 bool init_plugin(void *self) {
     // retrieve plugin arguments
@@ -332,10 +336,11 @@ bool init_plugin(void *self) {
     pcb.insn_exec = ins_exec_callback;
     panda_register_callback(self, PANDA_CB_INSN_EXEC, pcb);
 
-    pcb.after_PGD_write = vmi_pgd_changed;
+    //pcb.after_PGD_write = vmi_pgd_changed;
     panda_register_callback(self, PANDA_CB_VMI_PGD_CHANGED, pcb);
 
-    PPP_REG_CB("osi", on_new_process, on_new_process);
+    //PPP_REG_CB("osi", on_new_process, on_new_process);
+    //PPP_REG_CB("osi", on_finished_process, on_finished_process);
 
     return true;
 #else

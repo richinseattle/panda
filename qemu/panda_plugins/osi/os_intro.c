@@ -44,6 +44,7 @@ PPP_PROT_REG_CB(on_free_osiprocs)
 PPP_PROT_REG_CB(on_free_osimodules)
 #ifdef OSI_PROC_EVENTS
 PPP_PROT_REG_CB(on_new_process)
+PPP_PROT_REG_CB(on_finished_process)
 #endif
 
 PPP_CB_BOILERPLATE(on_get_processes)
@@ -55,6 +56,7 @@ PPP_CB_BOILERPLATE(on_free_osiprocs)
 PPP_CB_BOILERPLATE(on_free_osimodules)
 #ifdef OSI_PROC_EVENTS
 PPP_CB_BOILERPLATE(on_new_process)
+PPP_CB_BOILERPLATE(on_finished_process)
 #endif
 
 // The copious use of pointers to pointers in this file is due to
@@ -99,18 +101,30 @@ void free_osimodules(OsiModules *ms) {
 
 #ifdef OSI_PROC_EVENTS
 int vmi_pgd_changed(CPUState *env, target_ulong oldval, target_ulong newval) {
-    OsiProcs *ps = NULL;
-    OsiProc *p = NULL;
+    uint32_t i;
+    OsiProcs *ps, *in, *out;
+    ps = in = out = NULL;
 
     /* update process state */
     ps = get_processes(env);
-    procstate_update(ps);
+    procstate_update(ps, &in, &out);
 
-    /* only free the top ps structure */
-    //g_free(ps);
+    /* invoke callbacks for new processes */
+    if (in != NULL) {
+        for (i=0; i<in->num; i++) {
+            PPP_RUN_CB(on_new_process, env, &in->proc[i]);
+        }
+        free_osiprocs(in);
+    }
 
+    /* invoke callbacks for finished processes */
+    if (out != NULL) {
+        for (i=0; i<out->num; i++) {
+            PPP_RUN_CB(on_finished_process, env, &out->proc[i]);
+        }
+        free_osiprocs(out);
+    }
 
-    PPP_RUN_CB(on_new_process, env, p);
     return 0;
 }
 #endif
