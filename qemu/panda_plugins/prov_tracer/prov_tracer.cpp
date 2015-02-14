@@ -38,30 +38,6 @@ void on_new_process(CPUState *, OsiProc *);
 void *syscalls_dl;                      /**< DL handle for syscalls table. */
 struct syscall_entry *syscalls;		/**< Syscalls table. */
 
-
-
-/*
- *	--------------------
- *	Panda API cheatsheet
- *	--------------------
- *	void panda_register_callback(void *plugin, PANDA_CB_USER_AFTER_SYSCALL, panda_cb cb);
- *	int panda_physical_memory_rw(target_phys_addr_t addr, uint8_t *buf, int len, int is_write);
- *	target_phys_addr_t panda_virt_to_phys(CPUState *env, target_ulong addr);
- *	int panda_virtual_memory_rw(CPUState *env, target_ulong addr, uint8_t *buf, int len, int is_write);
- *
- *	--------------------
- *	QEMU formats and types cheatsheet
- *	--------------------
- *	Formats (from cpu.h):
- *	  TARGET_FMT_lx
- *	  TARGET_FMT_ld
- *	  TARGET_FMT_lu
- *	Types:
- *	  target_int
- */
-
-unsigned int ts;                        // internal timestamp - mostly for debugging
-
 /* 
 	http://www.tldp.org/LDP/tlk/ds/ds.html
 
@@ -248,7 +224,9 @@ int ins_exec_callback(CPUState *env, PTR pc) {
 
             default:
             {
-		LOG_WARN("Unexpected instrumented instruction.");
+		LOG_WARN("Unexpected instrumented instruction: %s",
+		    GET_MNEMONIC_NAME(ins->opcode)
+		);
 	    }
             break;
         }
@@ -337,10 +315,10 @@ bool init_plugin(void *self) {
     panda_register_callback(self, PANDA_CB_INSN_EXEC, pcb);
 
     //pcb.after_PGD_write = vmi_pgd_changed;
-    panda_register_callback(self, PANDA_CB_VMI_PGD_CHANGED, pcb);
+    //panda_register_callback(self, PANDA_CB_VMI_PGD_CHANGED, pcb);
 
-    //PPP_REG_CB("osi", on_new_process, on_new_process);
-    //PPP_REG_CB("osi", on_finished_process, on_finished_process);
+    PPP_REG_CB("osi", on_new_process, on_new_process);
+    PPP_REG_CB("osi", on_finished_process, on_finished_process);
 
     return true;
 #else
