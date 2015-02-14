@@ -9,12 +9,15 @@ sh ./pp.sh
 
 # only 
 LLVM_BIT=""
-if [ -f ../llvm ]
+if [ -e ../llvm ]
 then
+  echo "Found ../llvm -- LLVM SUPPORT IS ENABLED"
   LLVM_BIT="--enable-llvm --with-llvm=../llvm/${PANDA_LLVM_BUILD:=Release}"
 else
   echo "No ../llvm dir found -- LLVM SUPPORT IS DISABLED"
 fi  
+
+
     
 
 ./configure --target-list=x86_64-softmmu,i386-softmmu,arm-softmmu \
