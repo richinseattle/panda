@@ -1,9 +1,11 @@
 #include "osi_proc_events.h"
 
 extern "C" {
+#include <os_intro.h>
 #include <osi_int.h>
 }
 
+#include <glib.h>
 #include <string.h>
 #include <algorithm>
 #include <iterator>
@@ -24,7 +26,11 @@ ProcState::ProcState(void) {
 ProcState::~ProcState(void) {
 	if (this->pid_set != NULL) delete this->pid_set;
 	if (this->proc_map != NULL) delete this->proc_map;
-	free_osiprocs(this->ps);
+
+	// This destructor is called at the end of the replay.
+	// Calling free_osiprocs() may cause a segfault at that point.
+	// Use the generic free macro instead.
+	FREE_OSIPROCS_GENERIC(this->ps);
 }
 
 /*! @brief Gets a subset of the processes in `ProcMap`. */

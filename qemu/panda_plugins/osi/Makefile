@@ -8,8 +8,8 @@ PLUGIN_NAME=osi
 include ../panda.mak
 
 # If you need custom CFLAGS or LIBS, set them up here
-# CFLAGS+=
 # LIBS+=
+# CFLAGS+=-save-temps
 CXXFLAGS+=-std=c++11
 
 # The main rule for your plugin. Please stick with the panda_ naming
