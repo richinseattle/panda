@@ -20,6 +20,12 @@ extern "C" {
 #include <distorm.h>
 namespace distorm {
 #include <mnemonics.h>
+
+/* redefine macros to use the distorm namespace */
+#undef GET_REGISTER_NAME
+#undef GET_MNEMONIC_NAME
+#define GET_REGISTER_NAME(r) (unsigned char*)distorm::_REGISTERS[(r)].p
+#define GET_MNEMONIC_NAME(m) ((distorm::_WMnemonic*)&distorm::_MNEMONICS[(m)])->p
 }
 #if defined(TARGET_X86_64)
 #define DISTORM_DT Decode64Bits
