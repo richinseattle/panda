@@ -1,8 +1,7 @@
 #include "osi_proc_events.h"
 
 extern "C" {
-#include <os_intro.h>
-#include <osi_int.h>
+#include <osi_int_fns.h>
 }
 
 #include <glib.h>
