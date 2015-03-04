@@ -21,4 +21,8 @@ osi_linux
 osi_test
 win7x86intro
 memstrings
+asidstory
+file_taint
+win7proc
+ida_taint
 prov_tracer
