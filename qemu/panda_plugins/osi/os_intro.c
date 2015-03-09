@@ -109,20 +109,20 @@ int vmi_pgd_changed(CPUState *env, target_ulong oldval, target_ulong newval) {
     ps = get_processes(env);
     procstate_update(ps, &in, &out);
 
-    /* invoke callbacks for new processes */
-    if (in != NULL) {
-        for (i=0; i<in->num; i++) {
-            PPP_RUN_CB(on_new_process, env, &in->proc[i]);
-        }
-        free_osiprocs(in);
-    }
-
     /* invoke callbacks for finished processes */
     if (out != NULL) {
         for (i=0; i<out->num; i++) {
             PPP_RUN_CB(on_finished_process, env, &out->proc[i]);
         }
         free_osiprocs(out);
+    }
+
+    /* invoke callbacks for new processes */
+    if (in != NULL) {
+        for (i=0; i<in->num; i++) {
+            PPP_RUN_CB(on_new_process, env, &in->proc[i]);
+        }
+        free_osiprocs(in);
     }
 
     return 0;

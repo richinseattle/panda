@@ -28,8 +28,8 @@ ProcState::~ProcState(void) {
 
 	// This destructor is called at the end of the replay.
 	// Calling free_osiprocs() may cause a segfault at that point.
-	// Use the generic free macro instead.
-	FREE_OSIPROCS_GENERIC(this->ps);
+	// Use the generic inline.
+	free_osiprocs_g(this->ps);
 }
 
 /*! @brief Gets a subset of the processes in `ProcMap`. */
@@ -37,22 +37,19 @@ OsiProcs *ProcState::OsiProcsSubset(ProcMap *m, PidSet *s) {
 	int notfound = 0;
 	OsiProcs *ps = (OsiProcs *)g_malloc0(sizeof(OsiProcs));
 
-	// ProcState::OsiProcCopy attempts to free OsiProc members.
-	// ps->proc array must be zeroed-out to avoid this.
 	ps->proc = g_new0(OsiProc, s->size());
-
 	for (auto it=s->begin(); it!=s->end(); ++it) {
 		auto p_it = m->find(*it);
 		if (unlikely(p_it == m->end())) {
 			notfound++;
 			continue;
 		}
-		ProcState::OsiProcCopy(p_it->second, &ps->proc[ps->num++]);
+		copy_osiproc_g(p_it->second, &ps->proc[ps->num]);
+		ps->num++;
 	}
 
 	if (ps->num == 0) goto error;
 
-	// XXX: Log a warning if notfound > 0.
 	return ps;
 	
 error:
@@ -60,29 +57,13 @@ error:
 	return NULL;
 }
 
-/*! @brief Copies an OsiProc struct. */
-OsiProc *ProcState::OsiProcCopy(OsiProc *from, OsiProc *to) {
-	if (from == NULL || to == NULL) goto error;
-
-	// destination struct is expected to be either valid or zeroed-out
-	g_free(to->name);
-	g_free(to->pages);
-
-	memcpy(to, from, sizeof(OsiProc));
-	to->name = g_strdup(from->name);
-	to->pages = NULL; // OsiPage - TODO
-	return to;
-
-error:
-	return NULL;
-}
-
 /*! @brief Updates the ProcState with the new process set.
  * If `in` and `out` are not NULL, the new and finished processes
  * will be returned through them.
  * 
- * @note For efficiency, the passed `ps` becomes part of the
- * ProcState and must not be freed by the caller.
+ * @note For efficiency (i.e. to avoid an additional copy),
+ * the passed `ps` becomes part of the ProcState.
+ * Therefore, it must not be freed by the caller.
  */
 void ProcState::update(OsiProcs *ps, OsiProcs **in, OsiProcs **out){
 	PidSet *pid_set_new = new PidSet();
@@ -91,14 +72,14 @@ void ProcState::update(OsiProcs *ps, OsiProcs **in, OsiProcs **out){
 	// copy data to c++ containers
 	for (unsigned int i=0; i<ps->num; i++) {
 		OsiProc *p = &ps->proc[i];
-		target_ulong pid = p->pid;
 
-		pid_set_new->insert(pid);
-		auto ret = proc_map_new->insert(std::make_pair(pid, p));
+		target_ulong asid = p->asid;
+		pid_set_new->insert(asid);
+		auto ret = proc_map_new->insert(std::make_pair(asid, p));
 
 		// ret type is pair<iterator, bool>
-		if (!ret.second) {
-			printf("DUP %d\n", (int)pid);
+		if (!ret.second && (asid != 0)) {
+			LOG_INFO("DUP " TARGET_FMT_lu " %s/%s", asid, ((*(ret.first)).second->name), p->name);
 		}
 	}
 
