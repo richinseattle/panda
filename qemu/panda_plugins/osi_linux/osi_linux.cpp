@@ -58,13 +58,26 @@ int panda_memory_errors;
  * @brief Fills an OsiProc struct.
  */
 static void fill_osiproc(CPUState *env, OsiProc *p, PTR task_addr) {
+    int err;
+
     p->offset = task_addr;  // XXX: Not sure what this is. Storing task_addr here seems logical.
     p->name = get_name(env, task_addr, p->name);
-    panda_memory_errors = 0;
-    p->asid = get_pgd(env, task_addr);
-    p->pages = NULL; // OsiPage - TODO
     p->pid = get_pid(env, task_addr);
     p->ppid = get_real_parent_pid(env, task_addr);
+    p->pages = NULL; // OsiPage - TODO
+
+    p->asid = get_pgd(env, task_addr, &err);
+    if (p->asid == 0) {
+        if (err == 1) {
+            // Error on retrieving mm from task struct.
+            LOG_ERR("Error getting asid for task on " TARGET_FMT_lx " (%s)", task_addr, p->name);
+        }
+        else {
+            // Error on retrieving pgd from mm struct.
+            // This is expected for kernel structs where mm == NULL.
+            // Ignore.
+        }
+    }
 
 #if (OSI_LINUX_TEST)
     LOG_INFO(TARGET_FMT_lx ":%d:%d:" TARGET_FMT_lx ":%s", task_addr, (int)p->ppid, (int)p->pid, p->asid, p->name);
@@ -133,7 +146,6 @@ void on_get_current_process(CPUState *env, OsiProc **out_p) {
     OsiProc *p;
     PTR ts;
 
-    printf("NNNNNNNNNNNNNNNNNNNNNNNNNNNNNNNNNNNNNNNNNNN\n");
     p = (OsiProc *)g_malloc0(sizeof(OsiProc));
     ts = get_task_struct(env, (_ESP & THREADINFO_MASK));
     fill_osiproc(env, p, ts);
