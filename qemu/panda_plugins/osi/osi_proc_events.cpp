@@ -48,6 +48,8 @@ OsiProcs *ProcState::OsiProcsSubset(ProcMap *m, PidSet *s) {
 		ps->num++;
 	}
 
+	if (unlikely(notfound > 0)) LOG_WARN("PEVT: Process mapt didn't include %d processes of the requested subset.", notfound);
+
 	if (ps->num == 0) goto error;
 
 	return ps;
@@ -72,8 +74,13 @@ void ProcState::update(OsiProcs *ps, OsiProcs **in, OsiProcs **out){
 	// copy data to c++ containers
 	for (unsigned int i=0; i<ps->num; i++) {
 		OsiProc *p = &ps->proc[i];
-
 		target_ulong asid = p->asid;
+
+		// Address Space identifier for all kernel tasks is 0.
+		// This is because they have no mm struct associated with them.
+		// Skip them.
+		if (asid == 0) continue;
+
 		pid_set_new->insert(asid);
 		auto ret = proc_map_new->insert(std::make_pair(asid, p));
 
