@@ -12,14 +12,14 @@ Sketch of some of the structures used for Linux OS introspection. Only relevant 
             unsigned long vm\_start;     /\* start address within vm_mm \*/
             unsigned long vm\_end;       /\* first byte after our end within vm_mm \*/
             unsigned long vm\_flags;     /\* RWXS flags \*/
-            struct file \*vm\_file {{     /\* file we map to (can be NULL): [fs.h][file], pp471 */
+            struct file \*vm\_file {{     /\* file we map to (can be NULL): [fs.h][file], pp471 \*/
                 struct path f\_path {{   /\* not pointer!: [path.h][path] \*/
                     struct vfsmount \*mnt {{    /\* mounted fs containing file: [mount.h][vfsmount] \*/
-                        struct dentry *mnt_mountpoint; /\* dentry of mountpoint: [dcache.h][dentry], pp475 \*/
-                        struct dentry *mnt_root; /\* root of the mounted tree: [dcache.h][dentry], pp475 \*/
+                        struct dentry \*mnt_mountpoint; /\* dentry of mountpoint: [dcache.h][dentry], pp475 \*/
+                        struct dentry \*mnt_root; /\* root of the mounted tree: [dcache.h][dentry], pp475 \*/
                     }};
                     struct dentry \*dentry {{    /\* where file is located on fs: [dcache.h][dentry], pp475 \*/
-                        struct qstr d_name {{   /\* not pointer!: [dcache.h][qstr] \*/
+                        struct qstr d\_name {{   /\* not pointer!: [dcache.h][qstr] \*/
                         	unsigned int len;
                             const unsigned char \*name;
                         }};
