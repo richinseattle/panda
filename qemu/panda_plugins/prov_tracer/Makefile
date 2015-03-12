@@ -18,11 +18,12 @@ QEMU_CXXFLAGS:=$(filter-out -O2, $(QEMU_CXXFLAGS))
 
 # Dynamic libraries for translating system calls.
 # Use gen_tables_linux.py script to generate these.
-LINUX_SYSCALLENTS_DL=$(foreach f,\
-	$(subst .c,.so,$(wildcard syscallents_linux-*.c)),\
+SYSCALLENTS_DL=$(foreach f,\
+	$(addsuffix .so,$(basename $(notdir $(wildcard syscalls/syscallents_*.c)))),\
 	$(PLUGIN_TARGET_DIR)/panda_$(PLUGIN_NAME)_$(f)\
 )
 
+	#$(subst .c,.so,$(wildcard syscalls/syscallents_*.c)),\
 # All object files used by the plugin.
 PLUGIN_OBJFILES=$(PLUGIN_TARGET_DIR)/$(PLUGIN_NAME).o
 
@@ -38,13 +39,13 @@ $(PLUGIN_TARGET_DIR)/$(PLUGIN_NAME)/%.o: $(PLUGIN_SRC_ROOT)/linux_vmi/%.cpp
 
 $(PLUGIN_TARGET_DIR)/$(PLUGIN_NAME).o: $(PLUGIN_SRC_ROOT)/$(PLUGIN_NAME)/$(PLUGIN_NAME).cpp
 
-$(PLUGIN_TARGET_DIR)/panda_$(PLUGIN_NAME)_syscallents_%.so: syscallents_%.c
+$(PLUGIN_TARGET_DIR)/panda_$(PLUGIN_NAME)_syscallents_%.so: syscalls/syscallents_%.c
 	$(call quiet-command,$(CC) -shared -o $@ $^,"  SYSCALL DEFS  $@")
 
 $(PLUGIN_TARGET_DIR)/panda_$(PLUGIN_NAME).so: $(PLUGIN_OBJFILES)
 	$(call quiet-command,$(CXX) $(filter-out $(CXXFLAGS_EXCLUDE), $(QEMU_CFLAGS)) -shared -o $@ $^ $(LIBS),"  PLUGIN  $@")
 
-all: $(PLUGIN_TARGET_DIR)/panda_$(PLUGIN_NAME).so $(LINUX_SYSCALLENTS_DL)
+all: $(PLUGIN_TARGET_DIR)/panda_$(PLUGIN_NAME).so $(SYSCALLENTS_DL)
 
 checkflags:
 ifeq (,$(findstring -DCONFIG_PANDA_VMI,$(QEMU_CFLAGS)))
