@@ -132,36 +132,6 @@ static inline _retType2 _name(CPUState* env, PTR _paramName) {                  
   return (_t2);                                                                                               \
 }
 
-/**
- * @brief IMPLEMENT_OFFSET_GET2L_ERR is a macro for generating uniform
- * inlines for retrieving data based on a *(location+offset1) + offset2.
- *
- * Errors are reported through an int pointer passed to the inline.
- * This enables reporting errors when errorRetValue can also occur without an error.
- * Error codes are:
- *  0: success
- *  1: 1st get failed - base address was 0
- *  2: 1st get failed - base address not 0
- *  3: 2nd get failed - address from 1st get was 0
- *  4: 2nd get failed - address from 1st get not 0
- */
-#define IMPLEMENT_OFFSET_GET2L_ERR(_name, _paramName, _retType1, _offset1, _retType2, _offset2, _errorRetValue)  \
-static inline _retType2 _name(CPUState* env, PTR _paramName, int *err) {                                         \
-  _retType1 _t1;                                                                                                 \
-  _retType2 _t2;                                                                                                 \
-  if (-1 == panda_virtual_memory_rw(env, _paramName + _offset1, (uint8_t *)&_t1, sizeof(_retType1), 0)) {        \
-    *err = _paramName == 0 ? 1 : 2;                                                                                                    \
-    return (_errorRetValue);                                                                                     \
-  }                                                                                                              \
-  if (-1 == panda_virtual_memory_rw(env, _t1 + _offset2, (uint8_t *)&_t2, sizeof(_retType2), 0)) {               \
-    *err = _t1 == 0 ? 3 : 4;                                                                                                    \
-    return (_errorRetValue);                                                                                     \
-  }                                                                                                              \
-  *err = 0;                                                                                                      \
-  return (_t2);                                                                                                  \
-}
-
-
 
 
 /* ******************************************************************
@@ -211,7 +181,7 @@ IMPLEMENT_OFFSET_GET2L(get_parent_pid, task_struct, PTR, ki.task.parent_offset, 
 /**
  * @brief Retrieves the address of the page directory from a task_struct.
  */
-IMPLEMENT_OFFSET_GET2L_ERR(get_pgd, task_struct, PTR, ki.task.mm_offset, PTR, ki.mm.pgd_offset, 0)
+IMPLEMENT_OFFSET_GET2L(get_pgd, task_struct, PTR, ki.task.mm_offset, PTR, ki.mm.pgd_offset, 0)
 
 
 /**
