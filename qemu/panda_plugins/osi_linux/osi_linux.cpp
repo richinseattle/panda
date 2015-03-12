@@ -68,14 +68,13 @@ static void fill_osiproc(CPUState *env, OsiProc *p, PTR task_addr) {
 
     p->asid = get_pgd(env, task_addr, &err);
     if (p->asid == 0) {
-        if (err == 1) {
-            // Error on retrieving mm from task struct.
-            LOG_ERR("Error getting asid for task on " TARGET_FMT_lx " (%s)", task_addr, p->name);
+        if (err > 3) {
+            // Error on retrieving pgd from mm struct.
+            LOG_ERR("Error %d getting asid for task on " TARGET_FMT_lx " (%s)", err, task_addr, p->name);
         }
         else {
-            // Error on retrieving pgd from mm struct.
-            // This is expected for kernel structs where mm == NULL.
-            // Ignore.
+            // Error on retrieving mm from task struct.
+            // This is expected for kernel structs. Ignore.
         }
     }
 
