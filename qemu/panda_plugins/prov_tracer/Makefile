@@ -25,7 +25,7 @@ SYSCALLENTS_DL=$(foreach f,\
 
 	#$(subst .c,.so,$(wildcard syscalls/syscallents_*.c)),\
 # All object files used by the plugin.
-PLUGIN_OBJFILES=$(PLUGIN_TARGET_DIR)/$(PLUGIN_NAME).o
+PLUGIN_OBJFILES=$(PLUGIN_TARGET_DIR)/$(PLUGIN_NAME).o $(PLUGIN_TARGET_DIR)/process_info.o
 
 .PHONY: all checkflags
 

@@ -11,7 +11,7 @@ extern "C" {
 #include "../osi/osi_types.h"		/**< Introspection data types. */
 #include "../osi/osi_ext.h"		/**< Introspection API. */
 #include "../osi/os_intro.h"		/**< Introspection callbacks. */
-#include "syscallents.h"
+#include "syscalls/syscallents.h"
 
 #include <stdio.h>
 #include <glib.h>
@@ -23,6 +23,9 @@ extern "C" {
 #include <iostream>
 #include <fstream>
 #include <sstream>
+#include <unordered_map>
+#include "syscalls/syscalls_decode.h"
+#include "process_info.h"
 
 /*
  * Functions interfacing with QEMU/PANDA should be linked as C.
@@ -34,105 +37,39 @@ void uninit_plugin(void *);
 void on_new_process(CPUState *, OsiProc *);
 }
 
-
 void *syscalls_dl;                      /**< DL handle for syscalls table. */
 struct syscall_entry *syscalls;		/**< Syscalls table. */
-
-/* 
-	http://www.tldp.org/LDP/tlk/ds/ds.html
-
-	thread_info struct starts on %ESP & 0xffffe000 (8k stack).
-	Its first element is a pointer to a task_struct struct.
-
-	task_struct contains the pid/gid of the running process, however their exact 
-        location is kernel-specific. I.e. it will be different depending of the flags
-	set during kernel compilation.
+ProcInfoMap pimap;
 
 
-    http://wiki.osdev.org/SYSENTER
-*/
 
-static inline const char *syscall2str(CPUState *env, PTR pc) {
-#if defined(TARGET_I386)
-    // XXX: OSDEP: On Windows and Linux, the system call id is in EAX.
-    int syscall_nr = env->regs[R_EAX];
 
-    // XXX: OSDEP: On Linux, system call arguments are passed in registers.
-    static int argidx[6] = {R_EBX, R_ECX, R_EDX, R_ESI, R_EDI, R_EBP};
 
-    // Buffer for printing syscall string arguments.
-    static unsigned char s[SYSCALL_STRSAMPLE_LEN];
-
-    int syscall_nargs = syscalls[syscall_nr].nargs;
-    std::stringstream ss;
-
-    ss << syscalls[syscall_nr].name << "(";
-
-    for (int i=0; i<syscall_nargs; i++) {
-        auto arg = env->regs[argidx[i]];
-        int rstatus;
-
-        switch (syscalls[syscall_nr].args[i]) {
-            case SYSCALL_ARG_INT:
-                ss << std::dec << (target_int)arg;
-                break;
-
-            case SYSCALL_ARG_PTR:
-                if (arg) { ss << '#' << std::hex << arg; }
-                else { ss << "NULL"; }
-                break;
-
-            case SYSCALL_ARG_STR:
-                if (arg) {
-		    int j;
-		    s[0] = '\0';
-
-                    // read blindly SYSCALL_MAX_STRLEN data
-                    rstatus = panda_virtual_memory_rw(env, arg, s, SYSCALL_STRSAMPLE_LEN, 0);
-                    CHECK_WARN((rstatus < 0), "Couldn't read syscall string argument.");
-
-		    // find printable chars at the beginning of the string
-		    for (j=0; j<SYSCALL_STRSAMPLE_LEN && isprint(s[j]) && s[j]!='\0'; j++) {}
-
-		    // append results to the buffer
-		    if (s[j] == '\0') { ss << '"' << s << '"'; }    // properly terminated string
-		    else if (j == 0) { ss << "...<bin>..."; }	    // nothing but garbage
-		    else {					    // some ascii followed by garbage
-			j = j<SYSCALL_STRSAMPLE_LEN ? j : j-1;
-			s[j] = '\0';
-			ss << '"' << s << '"' << "...<bin>...";
-		    }
-                }
-                else { ss << "NULL"; }
-                break;
-
-            default:
-                EXIT_ON_ERROR(1, "Unexpected syscall argument type.");
-                break;
-        }
-        ss << ", ";
+// ****************************************************************************
+// Unused/debug callbacks
+// ****************************************************************************
+int vmi_pgd_changed(CPUState *env, target_ulong oldval, target_ulong newval) {
+    LOG_INFO("PGD Update (%s): " TARGET_PTR_FMT " " TARGET_PTR_FMT, _CPU_MODE, oldval, newval);
+    if (_IN_KERNEL) {	// this check is redundant - PGD only changed in kernel mode
+	OsiProc *proc = get_current_process(env);
+	LOG_INFO("Current process: %s, PID:" TARGET_PID_FMT ", PPID:" TARGET_PID_FMT,
+	    proc->name, (int)proc->pid, (int)proc->ppid
+	);
     }
-
-    // rewind to overwrite the last ", "
-    if (syscall_nargs > 0) { ss.seekp(-2, ss.end); }
-    ss << ")";
-
-    // Note: According to the C++ docs, the pointer returned by
-    // c_str() may be invalidated by further calls.
-    // It is caller's responsibility to copy the string before any
-    // such calls.
-    return ss.str().c_str();
-#else
-    // have the function compiled, although initialization should fail earlier.
-    // XXX: ARM
-    std::stringstream ss;
-    return ss.str().c_str();
-#endif
+    else { LOG_ERROR("PGD updated in user mode???"); }
+    return 0;
 }
 
+int before_block_exec_cb(CPUState *env, TranslationBlock *tb) {
+	return 0;
+}
+// ****************************************************************************
 
 
-bool ins_translate_callback(CPUState *env, PTR pc) {
+
+
+
+bool ins_translate_callback(CPUState *env, TARGET_PTR pc) {
 #if defined(TARGET_I386)
     const int nbytes = 32;      // number of bytes to attempt to decode. sysenter/sysexit are 2 bytes long.
     const int ndecode = 1;      // number of instructions to decode
@@ -166,8 +103,7 @@ bool ins_translate_callback(CPUState *env, PTR pc) {
 #endif
 }
 
-
-int ins_exec_callback(CPUState *env, PTR pc) {
+int ins_exec_callback(CPUState *env, TARGET_PTR pc) {
 #if defined(TARGET_I386)
     const int nbytes = 32;      // number of bytes to attempt to decode. sysenter/sysexit are 2 bytes long.
     const int ndecode = 1;      // number of instructions to decode
@@ -188,8 +124,14 @@ int ins_exec_callback(CPUState *env, PTR pc) {
             continue;
         }
 
-	int pid = 0;		    // XXX: properly fill pid
-	char procname[] = "foo";    // XXX: properly fill name
+	//HHHHHHHEEEEERRRREEE
+    //if (! _IN_KERNEL) return 0;
+
+	OsiProc *p = get_current_process(env);
+
+	//auto pi_it = pimap.find(p->asid);
+	//EXIT_ON_ERROR(pi_it == pimap.end(), "Unknow asid (" TARGET_PTR_FMT ") for %s (%d).", p->asid, p->name, (int)p->pid);
+	//ProcInfo *pi = (*pi_it).second;
 
         switch(ins->opcode) {
             case distorm::I_SYSENTER:
@@ -205,20 +147,18 @@ int ins_exec_callback(CPUState *env, PTR pc) {
                 // of system call by jumping to a fixed address in the
                 // vsyscall page.
                 // (http://www.win.tue.nl/~aeb/linux/lk/lk-4.html)
-                //
-		//PTLOG("PGD:" TARGET_FMT_plx " SYSENTER:%s", _PGD, syscall2str(env, pc));
-                LOG_INFO("%s " PID_FMT "(%s) PGD=" PTR_FMT " PC=" PTR_FMT " %s",
-                    _CPU_MODE, pid, procname, _PGD, pc, syscall2str(env, pc)
-                );
+
+                //LOG_INFO("%s " TARGET_PID_FMT "(%s) PGD=" TARGET_PTR_FMT "/" TARGET_PTR_FMT "/" TARGET_PTR_FMT " PC=" TARGET_PTR_FMT " SYS:%s",
+                    //_CPU_MODE, (int)p->pid, p->name, _PGD, pimap.at(_PGD)->p.asid, panda_virt_to_phys(env, p->asid), pc, syscall2str(env, pc)
+                //);
             }
             break;
 
             case distorm::I_SYSEXIT:
             {
-		//PTLOG("PGD:" TARGET_FMT_plx " SYSEXIT", _PGD);
-                LOG_INFO("%s " PID_FMT "(%s) PGD=" PTR_FMT " PC=" PTR_FMT " %s",
-                    _CPU_MODE, pid, procname, _PGD, pc, "SYSEXIT"
-                );
+                //LOG_INFO("%s " TARGET_PID_FMT "(%s) PGD=" TARGET_PTR_FMT "/" TARGET_PTR_FMT " PC=" TARGET_PTR_FMT " SYS:%s",
+                    //_CPU_MODE, (int)p->pid, p->name, _PGD, panda_virt_to_phys(env, p->asid), pc, "EXIT"
+                //);
             }
             break;
 
@@ -230,6 +170,7 @@ int ins_exec_callback(CPUState *env, PTR pc) {
 	    }
             break;
         }
+	free_osiproc(p);
     }
 
     return 0;
@@ -240,35 +181,42 @@ int ins_exec_callback(CPUState *env, PTR pc) {
 #endif
 }
 
-int vmi_pgd_changed(CPUState *env, target_ulong oldval, target_ulong newval) {
-    LOG_INFO("PGD Update (%s): " PTR_FMT " " PTR_FMT, _CPU_MODE, oldval, newval);
-    if (_IN_KERNEL) {	// this check is redundant - PGD only changed in kernel mode
-	OsiProc *proc = get_current_process(env);
-	LOG_INFO("LOL");
-	LOG_INFO("Current process: %s, PID:" PID_FMT ", PPID:" PID_FMT,
-	    proc->name, (int)proc->pid, (int)proc->ppid
-	);
-    }
-    else {
-	LOG_INFO("WTF2");
-    }
-    return 0;
-}
-
-
-
-int before_block_exec_cb(CPUState *env, TranslationBlock *tb) {
-	//ptout << std::hex << env->regs[R_ESP] << ":" << (0xffffe000 & env->regs[R_ESP]) <<  std::endl;
-	return 0;
-}
-
-
 void on_new_process(CPUState *env, OsiProc *p) {
-    LOG_INFO("NEW: %s", p->name);
+    // asid addresses are in the kernel space - can be translated to physical addresses at any time
+    TARGET_PTR asid_ph = panda_virt_to_phys(env, p->asid);
+
+    LOG_INFO("PROV:NEWPROC: %-16s %5d %5d\t" TARGET_PTR_FMT " " TARGET_PTR_FMT,
+	p->name, (int)p->pid, (int)p->ppid, p->asid, asid_ph
+    );
+
+    // create ProcInfo
+    ProcInfo *pi = new ProcInfo(p);
+
+    // insert ProcInfo - use asid_ph as the key
+    auto inserted = pimap.insert(std::make_pair(asid_ph, pi));
+    EXIT_ON_ERROR(inserted.second == false, "Duplicate key (" TARGET_PTR_FMT ") for new process %s (%d).",
+	asid_ph, p->name, (int)p->pid
+    );
+    //EXIT_ON_ERROR( p->asid_ph != _PGD, "asid - PGD mismatch " TARGET_PTR_FMT " " TARGET_PTR_FMT " " TARGET_PTR_FMT, p->asid, asid_ph, _PGD);
 }
 
 void on_finished_process(CPUState *env, OsiProc *p) {
-    LOG_INFO("FINISHED: %s", p->name);
+    TARGET_PTR asid_ph = panda_virt_to_phys(env, p->asid);
+    LOG_INFO("PROV:EXITPROC: %-16s %5d %5d\t" TARGET_PTR_FMT " " TARGET_PTR_FMT,
+	p->name, (int)p->pid, (int)p->ppid, p->asid, asid_ph
+    );
+
+    // remove ProcInfo
+    auto pi_it = pimap.find(asid_ph);
+    EXIT_ON_ERROR(pi_it == pimap.end(), "Unknow key (" TARGET_PTR_FMT ") for terminating process %s (%d).",
+	asid_ph, p->name, (int)p->pid
+    );
+    ProcInfo *pi = (*pi_it).second;
+    pimap.erase(pi_it);
+
+    /* compare? */
+
+    delete pi;
 }
 
 bool init_plugin(void *self) {
@@ -320,6 +268,8 @@ bool init_plugin(void *self) {
 #ifdef OSI_PROC_EVENTS
     PPP_REG_CB("osi", on_new_process, on_new_process);
     PPP_REG_CB("osi", on_finished_process, on_finished_process);
+#else
+#error "Process Event Callbacks not enabled!"
 #endif
 
     return true;

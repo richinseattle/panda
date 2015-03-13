@@ -50,9 +50,9 @@ namespace distorm {
  *
  * @todo Maybe target_phys_addr_t should be used as PTR. Check targphys.h of QEMU.
  */
-#define PTR target_ulong
-#define PTR_FMT TARGET_FMT_lx
-#define PID_FMT "%5d"
+#define TARGET_PTR target_ulong
+#define TARGET_PTR_FMT TARGET_FMT_lx
+#define TARGET_PID_FMT "%5d"
 
 /*!
  * @brief Platform specific macro used to construct the name of the syscall table to load.
