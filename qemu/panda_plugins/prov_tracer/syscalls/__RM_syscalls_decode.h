@@ -1,31 +1,34 @@
 #ifndef SYSCALLS_DECODE_H
 #define SYSCALLS_DECODE_H
+#include "platform.h"
+#include <iostream>
+#include <sstream>
+#include "syscallents.h"
+extern "C" {
+extern struct syscall_entry *syscalls;      /**< Syscalls info table. */
+}
 
+#if 0
+static inline const char *syscall2str(CPUState *env) {
+#if defined(TARGET_I386)
+    // XXX: OSDEP: On Windows and Linux, the system call id is in EAX.
+    //      OSDEP: On Linux, system call arguments are passed in registers.
+    //             http://man7.org/linux/man-pages/man2/syscall.2.html
+    int nr = env->regs[R_EAX];
+    const int argidx[6] = {R_EBX, R_ECX, R_EDX, R_ESI, R_EDI, R_EBP};
 
-extern void *syscalls_dl;                   /**< DL handle for syscalls table. */
-extern struct syscall_entry *syscalls;      /**< Syscalls table. */
+#endif
+}
 
-
-/* 
-	http://www.tldp.org/LDP/tlk/ds/ds.html
-
-	thread_info struct starts on %ESP & 0xffffe000 (8k stack).
-	Its first element is a pointer to a task_struct struct.
-
-	task_struct contains the pid/gid of the running process, however their exact 
-        location is kernel-specific. I.e. it will be different depending of the flags
-	set during kernel compilation.
-
-
-    http://wiki.osdev.org/SYSENTER
-*/
-
-static inline const char *syscall2str(CPUState *env, TARGET_PTR pc) {
+static inline const char *syscall2str(int nr, union syscall_arg args[SYSCALL_MAXARGS]) {
+#endif
+static inline const char *syscall2str(CPUState *env) {
 #if defined(TARGET_I386)
     // XXX: OSDEP: On Windows and Linux, the system call id is in EAX.
     int syscall_nr = env->regs[R_EAX];
 
     // XXX: OSDEP: On Linux, system call arguments are passed in registers.
+    // http://man7.org/linux/man-pages/man2/syscall.2.html
     static int argidx[6] = {R_EBX, R_ECX, R_EDX, R_ESI, R_EDI, R_EBP};
 
     // Buffer for printing syscall string arguments.

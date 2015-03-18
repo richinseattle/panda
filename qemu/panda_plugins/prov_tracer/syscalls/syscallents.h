@@ -31,4 +31,11 @@ struct syscall_entry {
     enum syscall_argtype args[SYSCALL_MAXARGS];
 };
 
+#ifdef TARGET_PTR
+union syscall_arg {
+        int intval;
+        TARGET_PTR pval;
+};
+#endif
+
 #endif

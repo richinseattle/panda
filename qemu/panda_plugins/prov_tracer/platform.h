@@ -81,6 +81,9 @@ namespace distorm {
 
 /*!
  * @brief Platform specific macro for retrieving the page directory address.
+ *
+ * @note We use the PGD address as the asid of the process.
+ * Maybe instead of this macro, it's better to use panda_current_asid().
  */
 #if defined(TARGET_I386)
 #define _PGD    (env->cr[3])

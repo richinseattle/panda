@@ -22,9 +22,7 @@ extern "C" {
 }
 #include <iostream>
 #include <fstream>
-#include <sstream>
 #include <unordered_map>
-#include "syscalls/syscalls_decode.h"
 #include "process_info.h"
 
 /*
@@ -124,41 +122,48 @@ int ins_exec_callback(CPUState *env, TARGET_PTR pc) {
             continue;
         }
 
-	//HHHHHHHEEEEERRRREEE
-    //if (! _IN_KERNEL) return 0;
+	auto pi_it = pimap.find(_PGD);
+	if (pi_it == pimap.end()) {
+	    // This may occur at the beginning of replay.
+	    LOG_WARN("No ProcessInfo associated with " TARGET_PTR_FMT ".", _PGD);
+	    return 0;
+	}
+	ProcInfo *pi = (*pi_it).second;
+	OsiProc *p = &(pi->p);
 
-	OsiProc *p = get_current_process(env);
-
-	//auto pi_it = pimap.find(p->asid);
-	//EXIT_ON_ERROR(pi_it == pimap.end(), "Unknow asid (" TARGET_PTR_FMT ") for %s (%d).", p->asid, p->name, (int)p->pid);
-	//ProcInfo *pi = (*pi_it).second;
+	/*
+	// Update pi with missing info. Can only run in kernel mode.
+	// XXX: We store the task struct address in OsiProc struct.
+	//	Maybe we can use it to update OsiProc at any point in time.
+	if (_IN_KERNEL && pi->is_fresh) {
+	    OsiProc *p2 = get_current_process(env);
+	    ... update p ...
+	    free_osiproc(p2);
+	}
+	*/
 
         switch(ins->opcode) {
             case distorm::I_SYSENTER:
             {
-                // On Windows and Linux, the system call id is in EAX.
-                //
-                // On Linux, the PC will point to the same location for
-                // each syscall: At kernel initialization time the routine
-                // sysenter_setup() is called. It sets up a non-writable
-                // page and writes code for the sysenter instruction if
-                // the CPU supports that, and for the classical int 0x80
-                // otherwise. Thus, the C library can use the fastest type
-                // of system call by jumping to a fixed address in the
-                // vsyscall page.
-                // (http://www.win.tue.nl/~aeb/linux/lk/lk-4.html)
-
-                //LOG_INFO("%s " TARGET_PID_FMT "(%s) PGD=" TARGET_PTR_FMT "/" TARGET_PTR_FMT "/" TARGET_PTR_FMT " PC=" TARGET_PTR_FMT " SYS:%s",
-                    //_CPU_MODE, (int)p->pid, p->name, _PGD, pimap.at(_PGD)->p.asid, panda_virt_to_phys(env, p->asid), pc, syscall2str(env, pc)
-                //);
+		if (pi->syscall != NULL) {
+		    LOG_WARN("\"%s\" was pending when \"%s\" (%d) started!", pi->syscall->get_name(), SyscallInfo(env).get_name(), env->regs[R_EAX]);
+		    delete pi->syscall;
+		}
+		pi->syscall = new SyscallInfo(env);
             }
             break;
 
             case distorm::I_SYSEXIT:
             {
-                //LOG_INFO("%s " TARGET_PID_FMT "(%s) PGD=" TARGET_PTR_FMT "/" TARGET_PTR_FMT " PC=" TARGET_PTR_FMT " SYS:%s",
-                    //_CPU_MODE, (int)p->pid, p->name, _PGD, panda_virt_to_phys(env, p->asid), pc, "EXIT"
-                //);
+		if (pi->syscall != NULL) {
+		    LOG_INFO(TARGET_PID_FMT "(%s): syscall completed: %s", (int)p->pid, p->name, pi->syscall->c_str());
+		    delete pi->syscall;
+		    pi->syscall = NULL;
+		}
+		else {
+		    LOG_INFO(TARGET_PID_FMT "(%s): unknown syscall completed", (int)p->pid, p->name);
+
+		}
             }
             break;
 
@@ -170,7 +175,6 @@ int ins_exec_callback(CPUState *env, TARGET_PTR pc) {
 	    }
             break;
         }
-	free_osiproc(p);
     }
 
     return 0;
@@ -194,10 +198,7 @@ void on_new_process(CPUState *env, OsiProc *p) {
 
     // insert ProcInfo - use asid_ph as the key
     auto inserted = pimap.insert(std::make_pair(asid_ph, pi));
-    EXIT_ON_ERROR(inserted.second == false, "Duplicate key (" TARGET_PTR_FMT ") for new process %s (%d).",
-	asid_ph, p->name, (int)p->pid
-    );
-    //EXIT_ON_ERROR( p->asid_ph != _PGD, "asid - PGD mismatch " TARGET_PTR_FMT " " TARGET_PTR_FMT " " TARGET_PTR_FMT, p->asid, asid_ph, _PGD);
+    EXIT_ON_ERROR(inserted.second == false, "Duplicate key (" TARGET_PTR_FMT ") for new process %s (%d).", asid_ph, p->name, (int)p->pid);
 }
 
 void on_finished_process(CPUState *env, OsiProc *p) {
@@ -206,16 +207,12 @@ void on_finished_process(CPUState *env, OsiProc *p) {
 	p->name, (int)p->pid, (int)p->ppid, p->asid, asid_ph
     );
 
-    // remove ProcInfo
     auto pi_it = pimap.find(asid_ph);
-    EXIT_ON_ERROR(pi_it == pimap.end(), "Unknow key (" TARGET_PTR_FMT ") for terminating process %s (%d).",
-	asid_ph, p->name, (int)p->pid
-    );
+    EXIT_ON_ERROR(pi_it == pimap.end(), "Unknow key (" TARGET_PTR_FMT ") for terminating process %s (%d).", asid_ph, p->name, (int)p->pid);
     ProcInfo *pi = (*pi_it).second;
     pimap.erase(pi_it);
 
-    /* compare? */
-
+    // XXX: compare OsiProc for changes?
     delete pi;
 }
 
