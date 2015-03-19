@@ -21,6 +21,8 @@ extern "C" {
 #include <errno.h>
 }
 #include <iostream>
+#include <iomanip>
+#include <sstream>
 #include <fstream>
 #include <unordered_map>
 #include "process_info.h"
@@ -39,6 +41,52 @@ void *syscalls_dl;                      /**< DL handle for syscalls table. */
 struct syscall_entry *syscalls;		/**< Syscalls table. */
 ProcInfoMap pimap;
 
+
+// ****************************************************************************
+// Helpers
+// ****************************************************************************
+const char *panda_virtual_memory_smart_read(CPUState *env, target_ulong addr, size_t n) {
+    std::stringstream ss;
+    uint8_t *p = (uint8_t *)g_malloc(TARGET_PAGE_SIZE);
+
+    size_t n_rd = 0;
+    do {
+	// read next chunk of memory
+	int imax = n_rd + TARGET_PAGE_SIZE > n ? n-n_rd : TARGET_PAGE_SIZE;
+        if ( -1 == panda_virtual_memory_rw(env, addr, p, imax, 0) )
+            goto error;
+
+	// find printable chars at the beginning of the string
+	int j;
+	for (j=0; n_rd == 0 && j<imax && isprint(p[j]) && p[j]!='\0'; j++) {}
+
+	// print as string if at least 3 printable characters found
+	if (j>SMART_READ_MIN_STRLEN && p[j] == '\0') {
+	    ss << '"' << (char *)p << '"';
+	    goto starts_w_string;
+	}
+	else { j = 0; }
+
+	ss << "[";
+
+	// continue printing as hex
+	for (int i = j; i<imax; i++) {
+	    if (i>j && (i%4 == 0)) ss << '|';
+	    ss << std::hex << std::setw(2) << std::setfill('0') << (int)p[i];
+	}
+	n_rd += imax;
+    } while(n_rd < n);
+    ss << "]";
+
+starts_w_string:
+    g_free(p);
+    return ss.str().c_str();
+
+error:
+    g_free(p);
+    ss << "ERR";
+    return ss.str().c_str();
+}
 
 
 
@@ -146,7 +194,7 @@ int ins_exec_callback(CPUState *env, TARGET_PTR pc) {
             case distorm::I_SYSENTER:
             {
 		if (pi->syscall != NULL) {
-		    LOG_WARN("\"%s\" was pending when \"%s\" (%d) started!", pi->syscall->get_name(), SyscallInfo(env).get_name(), env->regs[R_EAX]);
+		    LOG_WARN("\"%s\" was pending when \"%s\" (" TARGET_FMT_ld ") started!", pi->syscall->get_name(), SyscallInfo(env).get_name(), env->regs[R_EAX]);
 		    delete pi->syscall;
 		}
 		pi->syscall = new SyscallInfo(env);
@@ -156,13 +204,13 @@ int ins_exec_callback(CPUState *env, TARGET_PTR pc) {
             case distorm::I_SYSEXIT:
             {
 		if (pi->syscall != NULL) {
-		    LOG_INFO(TARGET_PID_FMT "(%s): syscall completed: %s", (int)p->pid, p->name, pi->syscall->c_str());
+		    LOG_INFO(TARGET_PID_FMT "(%s): syscall completed: %s", (int)p->pid, p->name, pi->syscall->c_str(true));
 		    delete pi->syscall;
 		    pi->syscall = NULL;
 		}
 		else {
-		    LOG_INFO(TARGET_PID_FMT "(%s): unknown syscall completed", (int)p->pid, p->name);
-
+		    // This may occur at the beginning of replay.
+		    LOG_INFO(TARGET_PID_FMT "(%s): Unknown syscall completed.", (int)p->pid, p->name);
 		}
             }
             break;

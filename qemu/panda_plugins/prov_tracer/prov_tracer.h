@@ -20,4 +20,15 @@
 #define CHECK_WARN(cond, args...) do { if (unlikely(cond)) { LOG_WARN(args); } } while(0)
 #define EXIT_ON_ERROR(cond, args...) do { if (unlikely(cond)) { LOG_ERROR(args); exit(1); } } while(0)
 
+/*!
+ * @brief Smart memory read function.
+ *
+ * The function will read up to n bytes from `addr`.
+ * If a `\0` terminated string of at least `SMART_READ_MIN_STRLEN` characters is found at the
+ * beggining of the buffer, this string will be returned.
+ * Otherwise, `n` bytes will be returned formatted as a hex string.
+ */
+const char *panda_virtual_memory_smart_read(CPUState *env, target_ulong addr, size_t n);
+
+#define SMART_READ_MIN_STRLEN 3
 #endif

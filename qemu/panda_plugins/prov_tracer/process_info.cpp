@@ -1,10 +1,13 @@
 #include "platform.h"
+#include "prov_tracer.h"
 extern "C" {
 #include "config.h"
 #include "qemu-common.h"
 #include "cpu.h"
 }
 #include <glib.h>
+#include <iomanip>
+#include <iostream>
 #include <sstream>
 #include <unordered_map>
 
@@ -49,6 +52,7 @@ SyscallInfo::SyscallInfo(CPUState *env) {
     //      OSDEP: On Linux, system call arguments are passed in registers.
     this->nr = env->regs[R_EAX];
     static int argidx[6] = {R_EBX, R_ECX, R_EDX, R_ESI, R_EDI, R_EBP};
+    this->env = env;
 
     int syscall_nargs = syscalls[this->nr].nargs;
     for (int i=0; i<syscall_nargs; i++) {
@@ -61,7 +65,6 @@ SyscallInfo::SyscallInfo(CPUState *env) {
             case SYSCALL_ARG_PTR:
             case SYSCALL_ARG_STR:
 		this->args[i].pval = (TARGET_PTR)arg;
-		//this->args[i].sval = panda_virtual_memory_str_read(env, arg);
                 break;
 
             default:
@@ -87,39 +90,17 @@ std::ostream& SyscallInfo::dump(std::ostream& o) const {
                 break;
 
             case SYSCALL_ARG_PTR:
-                if (this->args[i].pval) { o << '#' << std::hex << this->args[i].pval; }
-                else { o << "NULL"; }
+                o   << "0x" << std::hex << std::setfill('0')
+		    << std::setw(2*sizeof(TARGET_PTR))
+		    << this->args[i].pval;
                 break;
 
             case SYSCALL_ARG_STR:
-                if (this->args[i].pval) { o << '$' << std::hex << this->args[i].pval; }
+		if (this->args[i].pval) {
+		    o << panda_virtual_memory_smart_read(this->env, this->args[i].pval, 16);
+		}
                 else { o << "NULL"; }
                 break;
-#if 0
-            case SYSCALL_ARG_STR:
-                if (this->args[i].pval) {
-		    int j;
-		    s[0] = '\0';
-
-                    // read blindly SYSCALL_MAX_STRLEN data
-                    int rstatus = panda_virtual_memory_rw(env, arg, s, SYSCALL_STRSAMPLE_LEN, 0);
-                    CHECK_WARN((rstatus < 0), "Couldn't read syscall string argument.");
-
-		    // find printable chars at the beginning of the string
-		    for (j=0; j<SYSCALL_STRSAMPLE_LEN && isprint(s[j]) && s[j]!='\0'; j++) {}
-
-		    // append results to the buffer
-		    if (s[j] == '\0') { o << '"' << s << '"'; }    // properly terminated string
-		    else if (j == 0) { o << "...<bin>..."; }	    // nothing but garbage
-		    else {					    // some ascii followed by garbage
-			j = j<SYSCALL_STRSAMPLE_LEN ? j : j-1;
-			s[j] = '\0';
-			o << '"' << s << '"' << "...<bin>...";
-		    }
-                }
-                else { o << "NULL"; }
-                break;
-#endif
 
             default:
                 EXIT_ON_ERROR(1, "Unexpected syscall argument type.");
@@ -130,11 +111,33 @@ std::ostream& SyscallInfo::dump(std::ostream& o) const {
     return o;
 }
 
+std::string SyscallInfo::str(bool include_rval) const {
+    std::stringstream ss;
+#if defined(TARGET_I386)
+    if (include_rval)
+	ss << env->regs[R_EAX] << " = ";
+#endif
+    ss << this;
+    return ss.str();
+}
+
 std::string SyscallInfo::str() const {
     std::stringstream ss;
     ss << this;
     return ss.str();
-    //ss << 'X' << this;
+}
+
+const char *SyscallInfo::c_str(bool include_rval) const {
+    std::stringstream ss;
+#if defined(TARGET_I386)
+    if (include_rval)
+	ss << env->regs[R_EAX] << " = ";
+#endif
+    ss << this;
+
+    // The pointer returned by c_str() may be invalidated by further calls.
+    // It's caller's responsibility to copy the string before any such calls.
+    return ss.str().c_str();
 }
 
 const char *SyscallInfo::c_str() const {

@@ -21,11 +21,16 @@ class SyscallInfo {
 		//~SyscallInfo();
 		std::ostream& dump(std::ostream& o) const;
 		std::string str() const;
+		std::string str(bool include_rval) const;
 		const char *c_str() const;
+		const char *c_str(bool include_rval) const;
 		const char *get_name() const;
 
 		int nr;
 		union syscall_arg args[SYSCALL_MAXARGS];
+
+	private:
+		CPUState *env = NULL;	/**< Pointer to the CPUState, used for extracting string arguments from memory. */
 };
 
 /**
