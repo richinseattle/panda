@@ -7,6 +7,17 @@ extern "C" {
 
 
 
+/*!
+ * @brief Macro for quashing unused variable warnings.
+ */
+#ifdef __GNUC__
+#define PERMIT_UNUSED __attribute__ ((unused))
+#else
+#define PERMIT_UNUSED
+#endif
+
+
+
 /**
  * @brief Disassembly support.
  *

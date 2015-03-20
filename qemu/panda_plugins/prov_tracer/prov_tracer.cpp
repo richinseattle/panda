@@ -21,10 +21,12 @@ extern "C" {
 #include <errno.h>
 }
 #include <iostream>
+#include <fstream>
 #include <iomanip>
 #include <sstream>
-#include <fstream>
 #include <unordered_map>
+#include <chrono>
+#include <ctime>
 #include "process_info.h"
 
 /*
@@ -40,6 +42,7 @@ void on_new_process(CPUState *, OsiProc *);
 void *syscalls_dl;                      /**< DL handle for syscalls table. */
 struct syscall_entry *syscalls;		/**< Syscalls table. */
 ProcInfoMap pimap;
+std::ofstream prov_out;			/**< Provenance output stream. */
 
 
 // ****************************************************************************
@@ -265,9 +268,13 @@ void on_finished_process(CPUState *env, OsiProc *p) {
 }
 
 bool init_plugin(void *self) {
+    // timestamp
+    PERMIT_UNUSED std::time_t start_time = std::time(NULL);
+
     // retrieve plugin arguments
     panda_arg_list *plugin_args = panda_get_args(PLUGIN_NAME);
     char *guest_os = g_strdup(panda_parse_string(plugin_args, "guest", "linux"));
+    PERMIT_UNUSED char *prov_out_filename = g_strdup(panda_parse_string(plugin_args, "prov_out", "prov_out.raw"));
     if (plugin_args != NULL) panda_free_args(plugin_args);
 
     // load syscalls table
@@ -317,11 +324,14 @@ bool init_plugin(void *self) {
 #error "Process Event Callbacks not enabled!"
 #endif
 
+    // open provenance output stream
+    prov_out.open(prov_out_filename, std::ofstream::trunc);
+    prov_out << "# " << std::ctime(&start_time);
+
     return true;
 #else
     LOG_ERROR("%s does not support target %s.", PLUGIN_NAME, TARGET_ARCH);
 #endif
-
 
 error1:
     g_free(syscalls_dlname);
@@ -333,6 +343,11 @@ error0:
 }
 
 void uninit_plugin(void *self) {
+#if defined(TARGET_I386)
+    std::time_t end_time = std::time(NULL);
+    prov_out << "# " << std::ctime(&end_time);
+    prov_out.close();
+#endif
     ERRNO_CLEAR;
     CHECK_WARN(dlclose(syscalls_dl) != 0, "%s", dlerror());
 }
