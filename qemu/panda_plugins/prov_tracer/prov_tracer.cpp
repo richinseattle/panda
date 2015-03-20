@@ -182,16 +182,16 @@ int ins_exec_callback(CPUState *env, TARGET_PTR pc) {
 	ProcInfo *pi = (*pi_it).second;
 	OsiProc *p = &(pi->p);
 
-	/*
 	// Update pi with missing info. Can only run in kernel mode.
 	// XXX: We store the task struct address in OsiProc struct.
 	//	Maybe we can use it to update OsiProc at any point in time.
 	if (_IN_KERNEL && pi->is_fresh) {
 	    OsiProc *p2 = get_current_process(env);
-	    ... update p ...
+	    g_free(pi->p.name);
+	    pi->p.name = g_strdup(p2->name);
+	    pi->is_fresh = false;
 	    free_osiproc(p2);
 	}
-	*/
 
         switch(ins->opcode) {
             case distorm::I_SYSENTER:

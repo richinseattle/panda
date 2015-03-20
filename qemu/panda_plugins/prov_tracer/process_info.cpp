@@ -14,6 +14,7 @@ extern "C" {
 #include "../osi/osi_types.h"		/**< Introspection data types. */
 #include "syscalls/syscallents.h"
 #include "process_info.h"
+#include "prov_log.h"			/**< Macros for logging raw provenance. */
 
 extern "C" {
 extern struct syscall_entry *syscalls;      /**< Syscalls info table. */
@@ -25,9 +26,13 @@ extern struct syscall_entry *syscalls;      /**< Syscalls info table. */
 // *******************************************************************
 ProcInfo::ProcInfo(OsiProc *p) {
 	copy_osiproc_g(p, &this->p);
+
+	PROVLOG_EXEC(this);
 }
 
 ProcInfo::~ProcInfo(void) {
+	PROVLOG_QUIT(this);
+
 	g_free(this->p.name);
 	if (this->syscall != NULL) delete this->syscall;
 }
