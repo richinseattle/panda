@@ -72,6 +72,9 @@ void ProcState::update(OsiProcs *ps, OsiProcs **in, OsiProcs **out){
 	ProcMap *proc_map_new = new ProcMap();
 
 	// copy data to c++ containers
+#ifdef PROC_EVENTS_DBG
+	printf("*+**********\n");
+#endif
 	for (unsigned int i=0; i<ps->num; i++) {
 		OsiProc *p = &ps->proc[i];
 		target_ulong asid = p->asid;
@@ -81,6 +84,10 @@ void ProcState::update(OsiProcs *ps, OsiProcs **in, OsiProcs **out){
 		// Skip them.
 		if (asid == 0) continue;
 
+#ifdef PROC_EVENTS_DBG
+		printf("*\t%-10s\t" TARGET_FMT_lu "\t" TARGET_FMT_lu "\t" TARGET_FMT_lx "\n", p->name, p->pid, p->ppid, p->asid);
+#endif
+
 		pid_set_new->insert(asid);
 		auto ret = proc_map_new->insert(std::make_pair(asid, p));
 
@@ -89,6 +96,9 @@ void ProcState::update(OsiProcs *ps, OsiProcs **in, OsiProcs **out){
 			LOG_INFO("DUP " TARGET_FMT_lu " %s/%s", asid, ((*(ret.first)).second->name), p->name);
 		}
 	}
+#ifdef PROC_EVENTS_DBG
+	printf("*+**********\n");
+#endif
 
 	// extract OsiProcs
 	if (likely(in != NULL && out != NULL)) {
