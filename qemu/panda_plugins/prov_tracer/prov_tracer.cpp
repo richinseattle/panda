@@ -68,6 +68,27 @@ const char *panda_virtual_memory_smart_read(CPUState *env, target_ulong addr, si
 	    ss << '"' << (char *)p << '"';
 	    goto starts_w_string;
 	}
+	else if (! (strncmp((char *)p, ".", 2) && strncmp((char *)p, "..", 3)) ) {
+	    // special case -- allow "." and ".." strings
+	    // these are common when dealing with filenames
+	    ss << '"' << (char *)p << '"';
+	    goto starts_w_string;
+	}
+	else if (j == imax && p[j-1] != '\0') {
+	    // all printable characters, but no terminator
+	    char c = (char)p[j-1];
+	    p[j-1] = '\0';
+	    ss << '"' << (char *)p << c << "\"...<cont>...";
+	    p[j-1] = c;
+
+	    // XXX: This is not handled properly in the case where
+	    //	    n is bigger than TARGET_PAGE_SIZE. In that case we should
+	    //	    continue reading another chunk until a terminator is found
+	    //	    or n is exceeded.
+	    //	    However this is a corner case which would make the code
+	    //	    much more complicated.
+	    goto starts_w_string;
+	}
 	else { j = 0; }
 
 	ss << "[";
@@ -180,50 +201,40 @@ int ins_exec_callback(CPUState *env, TARGET_PTR pc) {
 	    return 0;
 	}
 	ProcInfo *pi = (*pi_it).second;
-	OsiProc *p = &(pi->p);
 
 	// Update pi with missing info. Can only run in kernel mode.
 	// XXX: We store the task struct address in OsiProc struct.
 	//	Maybe we can use it to update OsiProc at any point in time.
 	if (_IN_KERNEL && pi->is_fresh) {
-	    OsiProc *p2 = get_current_process(env);
+	    OsiProc *p_update = get_current_process(env);
+
 	    g_free(pi->p.name);
-	    pi->p.name = g_strdup(p2->name);
+	    pi->p.name = g_strdup(p_update->name);
 	    pi->is_fresh = false;
-	    free_osiproc(p2);
+
+	    free_osiproc(p_update);
+	}
+	else if (!_IN_KERNEL) {
+	    // test the new impl
+	    /*
+	    OsiProc *p_update = get_current_process(env);
+	    LOG_INFO("TEST:" TARGET_PTR_FMT ":%s", p->asid, p->name);
+	    LOG_INFO("TEST:" TARGET_PTR_FMT ":%s", p_update->asid, p_update->name);
+	    free_osiproc(p_update);
+	    */
 	}
 
         switch(ins->opcode) {
             case distorm::I_SYSENTER:
-            {
-		if (pi->syscall != NULL) {
-		    LOG_WARN("\"%s\" was pending when \"%s\" (" TARGET_FMT_ld ") started!", pi->syscall->get_name(), SyscallInfo(env).get_name(), env->regs[R_EAX]);
-		    delete pi->syscall;
-		}
-		pi->syscall = new SyscallInfo(env);
-            }
-            break;
+		pi->syscall_start(env);
+	    break;
 
             case distorm::I_SYSEXIT:
-            {
-		if (pi->syscall != NULL) {
-		    LOG_INFO(TARGET_PID_FMT "(%s): syscall completed: %s", (int)p->pid, p->name, pi->syscall->c_str(true));
-		    delete pi->syscall;
-		    pi->syscall = NULL;
-		}
-		else {
-		    // This may occur at the beginning of replay.
-		    LOG_INFO(TARGET_PID_FMT "(%s): Unknown syscall completed.", (int)p->pid, p->name);
-		}
-            }
+		pi->syscall_end(env);
             break;
 
             default:
-            {
-		LOG_WARN("Unexpected instrumented instruction: %s",
-		    GET_MNEMONIC_NAME(ins->opcode)
-		);
-	    }
+		LOG_WARN("Unexpected instrumented instruction: %s", GET_MNEMONIC_NAME(ins->opcode));
             break;
         }
     }
@@ -269,12 +280,12 @@ void on_finished_process(CPUState *env, OsiProc *p) {
 
 bool init_plugin(void *self) {
     // timestamp
-    PERMIT_UNUSED std::time_t start_time = std::time(NULL);
+    std::time_t start_time = std::time(NULL);
 
     // retrieve plugin arguments
     panda_arg_list *plugin_args = panda_get_args(PLUGIN_NAME);
     char *guest_os = g_strdup(panda_parse_string(plugin_args, "guest", "linux"));
-    PERMIT_UNUSED char *prov_out_filename = g_strdup(panda_parse_string(plugin_args, "prov_out", "prov_out.raw"));
+    char *prov_out_filename = g_strdup(panda_parse_string(plugin_args, "prov_out", "prov_out.raw"));
     if (plugin_args != NULL) panda_free_args(plugin_args);
 
     // load syscalls table
@@ -324,14 +335,15 @@ bool init_plugin(void *self) {
 #error "Process Event Callbacks not enabled!"
 #endif
 
+#else
+    LOG_ERROR("%s does not support target %s.", PLUGIN_NAME, TARGET_ARCH);
+#endif
+
     // open provenance output stream
     prov_out.open(prov_out_filename, std::ofstream::trunc);
     prov_out << "# " << std::ctime(&start_time);
 
     return true;
-#else
-    LOG_ERROR("%s does not support target %s.", PLUGIN_NAME, TARGET_ARCH);
-#endif
 
 error1:
     g_free(syscalls_dlname);
@@ -343,11 +355,16 @@ error0:
 }
 
 void uninit_plugin(void *self) {
-#if defined(TARGET_I386)
+    // delete ProcessInfo objects to dump pending prov
+    prov_out << "# dumping pending items" << std::endl;
+    for (auto pi_it=pimap.begin(); pi_it!=pimap.end(); ++pi_it) {
+	delete (*pi_it).second;
+    }
+
     std::time_t end_time = std::time(NULL);
     prov_out << "# " << std::ctime(&end_time);
     prov_out.close();
-#endif
+
     ERRNO_CLEAR;
     CHECK_WARN(dlclose(syscalls_dl) != 0, "%s", dlerror());
 }

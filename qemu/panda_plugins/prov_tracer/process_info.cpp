@@ -26,6 +26,7 @@ extern struct syscall_entry *syscalls;      /**< Syscalls info table. */
 // *******************************************************************
 ProcInfo::ProcInfo(OsiProc *p) {
 	copy_osiproc_g(p, &this->p);
+	this->syscall = NULL;
 
 	PROVLOG_EXEC(this);
 }
@@ -37,6 +38,75 @@ ProcInfo::~ProcInfo(void) {
 	if (this->syscall != NULL) delete this->syscall;
 }
 
+std::string ProcInfo::label() const {
+    std::stringstream ss;
+    ss << this->p.name << (this->is_fresh ? "*(" : "(") << this->p.pid << ")";
+    return ss.str();
+}
+
+void ProcInfo::syscall_start(CPUState *env) {
+#if defined(TARGET_I386)
+    if (this->syscall != NULL) {
+	LOG_WARN("%s: \"%s\" was pending when \"%s\" (" TARGET_FMT_ld ") started!",
+		this->label().c_str(), this->syscall->get_name(),
+		SyscallInfo(env).get_name(), env->regs[R_EAX]
+	);
+	delete this->syscall;
+    }
+    this->syscall = new SyscallInfo(env);
+#endif
+}
+
+void ProcInfo::syscall_end(CPUState *env) {
+#if defined(TARGET_I386)
+    if (unlikely(this->syscall == NULL)) {
+	// This may occur at the beginning of replay.
+	LOG_INFO("%s: Unknown syscall completed.", this->label().c_str());
+	return;
+    }
+
+    LOG_INFO("%s: syscall completed: %s", this->label().c_str(), this->syscall->c_str(true));
+
+    // Handle cases based on the prov_tracer specific nr.
+    // Using this custom nr is meant to simplify handling.
+    union syscall_arg arg;
+    switch(syscalls[this->syscall->nr].nr) {
+	case SYSCALL_OPEN:
+	{
+	    arg = this->syscall->get_arg(0, 128);
+	    char *filename = arg.sval;
+
+	    prov_out << "o:" << filename << ":" << this->syscall->nr << std::endl;
+	    g_free(filename);
+	    //PROVLOG_OPEN();
+	}
+	break;
+
+	case SYSCALL_READ:
+	{
+	    arg = this->syscall->get_arg(0, 0);
+	    int fd = arg.intval;
+	    prov_out << "r:" << fd << std::endl;
+	}
+	break;
+
+	case SYSCALL_OTHER:
+	    // ignore
+	break;
+
+	default:
+	    LOG_WARN("%s:No handling for the completed syscall.", this->label().c_str());
+	break;
+    }
+
+    delete this->syscall;
+    this->syscall = NULL;
+
+    return;
+#endif
+}
+
+
 
 
 // *******************************************************************
@@ -45,6 +115,7 @@ ProcInfo::~ProcInfo(void) {
 FileInfo::FileInfo(char *name) {
 	this->name = name;
 }
+
 
 
 
@@ -83,6 +154,36 @@ SyscallInfo::SyscallInfo(CPUState *env) {
 #endif
 }
 
+union syscall_arg SyscallInfo::get_arg(int n, size_t sz) const {
+    union syscall_arg r;
+    switch (syscalls[this->nr].args[n]) {
+	case SYSCALL_ARG_INT:
+	    r.intval = (target_int)this->args[n].intval;
+	break;
+
+	case SYSCALL_ARG_STR:
+	    r.sval = g_strdup(panda_virtual_memory_smart_read(this->env, this->args[n].pval, sz));
+	break;
+
+	case SYSCALL_ARG_PTR:
+	    if (sz == 0) {
+		// only interested in the value of the pointer
+		r.pval = (TARGET_PTR)this->args[n].pval;
+	    }
+	    else{
+		// interested in the actual data
+		r.buf = (uint8_t *)g_malloc(sz);
+		panda_virtual_memory_rw(this->env, this->args[n].pval, r.buf, sz, 0);
+	    }
+	break;
+
+	default:
+	    EXIT_ON_ERROR(1 == 1, "Huh?");
+	break;
+    }
+    return r;
+}
+
 std::ostream& SyscallInfo::dump(std::ostream& o) const {
     int nargs = syscalls[this->nr].nargs;
     o << syscalls[this->nr].name << "(";
@@ -92,24 +193,24 @@ std::ostream& SyscallInfo::dump(std::ostream& o) const {
         switch (syscalls[this->nr].args[i]) {
             case SYSCALL_ARG_INT:
                 o << std::dec << (target_int)this->args[i].intval;
-                break;
+            break;
 
             case SYSCALL_ARG_PTR:
                 o   << "0x" << std::hex << std::setfill('0')
 		    << std::setw(2*sizeof(TARGET_PTR))
 		    << this->args[i].pval;
-                break;
+            break;
 
             case SYSCALL_ARG_STR:
 		if (this->args[i].pval) {
-		    o << panda_virtual_memory_smart_read(this->env, this->args[i].pval, 16);
+		    o << panda_virtual_memory_smart_read(this->env, this->args[i].pval, 32);
 		}
                 else { o << "NULL"; }
-                break;
+            break;
 
             default:
                 EXIT_ON_ERROR(1, "Unexpected syscall argument type.");
-                break;
+            break;
         }
     }
     o << ")";

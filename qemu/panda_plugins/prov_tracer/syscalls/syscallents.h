@@ -35,6 +35,8 @@ struct syscall_entry {
 union syscall_arg {
         int intval;
         TARGET_PTR pval;
+        char *sval;
+        uint8_t *buf;
 };
 #endif
 

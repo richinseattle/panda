@@ -19,17 +19,18 @@ class SyscallInfo {
 	public:
 		SyscallInfo(CPUState *env);
 		//~SyscallInfo();
-		std::ostream& dump(std::ostream& o) const;
-		std::string str() const;
-		std::string str(bool include_rval) const;
+		std::ostream& dump(std::ostream& o) const;		/*< Dumps a string representation of the syscall on stream `o`. */
+		std::string str() const;						/*< Returns a string representation of the syscall, without showing a potential return value. */
+		std::string str(bool include_rval) const;		/*< Returns a string representation of the syscall, which may also include the return value. */
 		const char *c_str() const;
 		const char *c_str(bool include_rval) const;
 		const char *get_name() const;
+		union syscall_arg get_arg(int n, size_t sz) const;	/*< Returns the value of a syscall argument, depending on its type. Strings/buffers have to be freed. */
 
 		int nr;
-		union syscall_arg args[SYSCALL_MAXARGS];
 
 	private:
+		union syscall_arg args[SYSCALL_MAXARGS];
 		CPUState *env = NULL;	/**< Pointer to the CPUState, used for extracting string arguments from memory. */
 };
 
@@ -44,13 +45,16 @@ class ProcInfo {
 	public:
 		ProcInfo(OsiProc *p);
 		~ProcInfo();
+		std::string label() const;
+		void syscall_start(CPUState *env);
+		void syscall_end(CPUState *env);
 
 		OsiProc p;				/**< OsiProc struct. */
 		bool is_fresh = true;	/**< Process is still "fresh". */
 		FDMap fd;
-		SyscallInfo *syscall = NULL;
 
 	private:
+		SyscallInfo *syscall;
 
 };
 typedef std::unordered_map<target_ulong, ProcInfo *> ProcInfoMap;
