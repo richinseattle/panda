@@ -1,6 +1,10 @@
 #ifndef PROCESSINFO_H
 #define PROCESSINFO_H
 
+class FileInfo;
+class SyscallInfo;
+class ProcInfo;
+
 class FileInfo {
 	public:
 		FileInfo(char *name);
@@ -17,7 +21,7 @@ typedef std::unordered_map<int, FileInfo *> FDMap;
  */
 class SyscallInfo {
 	public:
-		SyscallInfo(CPUState *env);
+		SyscallInfo(ProcInfo *pi, CPUState *env);		// XXX: Do we need ProcInfo???
 		//~SyscallInfo();
 		std::ostream& dump(std::ostream& o) const;		/*< Dumps a string representation of the syscall on stream `o`. */
 		std::string str() const;						/*< Returns a string representation of the syscall, without showing a potential return value. */
@@ -26,11 +30,13 @@ class SyscallInfo {
 		const char *c_str(bool include_rval) const;
 		const char *get_name() const;
 		union syscall_arg get_arg(int n, size_t sz) const;	/*< Returns the value of a syscall argument, depending on its type. Strings/buffers have to be freed. */
+		int get_ret() const;
 
 		int nr;
 
 	private:
 		union syscall_arg args[SYSCALL_MAXARGS];
+		ProcInfo *pi = NULL;
 		CPUState *env = NULL;	/**< Pointer to the CPUState, used for extracting string arguments from memory. */
 };
 

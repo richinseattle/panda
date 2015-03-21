@@ -48,8 +48,10 @@ extern off_t stdcount[STDFD_MAX];
 /**** output macros and inlines ***********************************/
 
 /* inline functions for raw provenance logging */
-static inline void PROVLOG_OPEN(const ufd_t ufd, const std::string & fdname, const int flags, const int created) {
-	prov_out << "o:ufd" << ufd << ":" << fdname << std::endl;
+//static inline void PROVLOG_OPEN(const ufd_t ufd, const std::string & fdname, const int flags, const int created) {
+static inline void PROVLOG_OPEN(TARGET_PTR asid, const char *filename, const int flags) {
+	prov_out << "o:" << asid << ":" << filename << std::endl;
+#if 0
 
 	// Unless the the O_WRONLY flag is on, the file descriptor can be read.
 	if (! (flags&O_WRONLY) )
@@ -71,9 +73,7 @@ static inline void PROVLOG_OPEN(const ufd_t ufd, const std::string & fdname, con
 			prov_out << "g:u:" << "the real exename"  << ":" << fdname << std::endl;
 		}
 	}
-	
-	// TODO: (low urgency) emit a truncation line if O_TRUNC is included
-	//	     in the flags
+#endif
 }
 static inline void PROVLOG_CLOSE(const ufd_t ufd) {
 	prov_out << "c:ufd" << ufd << std::endl;

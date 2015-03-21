@@ -27,7 +27,7 @@ extern "C" {
 #include <unordered_map>
 #include <chrono>
 #include <ctime>
-#include "process_info.h"
+#include "accounting.h"
 
 /*
  * Functions interfacing with QEMU/PANDA should be linked as C.
