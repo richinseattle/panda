@@ -24,7 +24,6 @@ extern "C" {
 #include <fstream>
 #include <iomanip>
 #include <sstream>
-#include <unordered_map>
 #include <chrono>
 #include <ctime>
 #include "accounting.h"

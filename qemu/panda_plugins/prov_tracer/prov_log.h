@@ -2,18 +2,6 @@
 #define PROVLOG_H
 #include "prov_tracer.h"
 
-#if 0
-#include <array>
-#include <fstream>
-#include <iostream>
-#include <set>
-#include <map>
-#include <string>
-
-#include <sys/types.h>
-#include <sys/stat.h>
-#endif
-
 /* min/max macros for general use */
 #if !defined(MIN)
 #define MIN(a,b) (((a)<(b))?(a):(b))
@@ -48,33 +36,25 @@ extern off_t stdcount[STDFD_MAX];
 /**** output macros and inlines ***********************************/
 
 /* inline functions for raw provenance logging */
-//static inline void PROVLOG_OPEN(const ufd_t ufd, const std::string & fdname, const int flags, const int created) {
-static inline void PROVLOG_OPEN(TARGET_PTR asid, const char *filename, const int flags) {
-	prov_out << "o:" << asid << ":" << filename << std::endl;
+static inline void PROVLOG_OPEN(const TARGET_PTR asid, const char *filename, const int flags) {
 #if 0
+#endif
+}
+static inline void PROVLOG_READ(const TARGET_PTR asid, const char *filename) {
 
+}
+static inline void PROVLOG_WRITE(const TARGET_PTR asid, const char *filename) {
+
+}
+	
+	//prov_out << "o:" << asid << ":" << filename << std::endl;
+#if 0
 	// Unless the the O_WRONLY flag is on, the file descriptor can be read.
 	if (! (flags&O_WRONLY) )
 		prov_out << "u:" << "the real exename"  << ":" << fdname << std::endl;
 	
 	// Emit a generated line if needed.
-	if (flags & (O_WRONLY|O_RDWR)) {
-		if (created) {
-			prov_out << "#g:created" << std::endl;
-			prov_out << "g:c:" << "the real exename"  << ":" << fdname << std::endl;
-		}
-		else if (flags & O_TRUNC) {
-			prov_out << "#g:truncated" << std::endl;
-			prov_out << "g:t:" << "the real exename"  << ":" << fdname << std::endl;
-		}
-		else {
-			// Updated means that it is opened for writing.
-			prov_out << "#g:updated" << std::endl;
-			prov_out << "g:u:" << "the real exename"  << ":" << fdname << std::endl;
-		}
-	}
 #endif
-}
 static inline void PROVLOG_CLOSE(const ufd_t ufd) {
 	prov_out << "c:ufd" << ufd << std::endl;
 }

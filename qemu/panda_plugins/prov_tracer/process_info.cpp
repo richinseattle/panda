@@ -5,16 +5,12 @@ extern "C" {
 #include "qemu-common.h"
 #include "cpu.h"
 }
-#include <glib.h>
-#include <iomanip>
 #include <iostream>
 #include <sstream>
-#include <unordered_map>
+#include <iomanip>
 
-#include "../osi/osi_types.h"		/**< Introspection data types. */
-#include "syscalls/syscallents.h"
 #include "accounting.h"
-#include "prov_log.h"			/**< Macros for logging raw provenance. */
+#include "prov_log.h"						/**< Macros for logging raw provenance. */
 
 extern "C" {
 extern struct syscall_entry *syscalls;      /**< Syscalls info table. */
@@ -60,9 +56,9 @@ void ProcInfo::syscall_start(CPUState *env) {
 void ProcInfo::syscall_end(CPUState *env) {
 #if defined(TARGET_I386)
     if (unlikely(this->syscall == NULL)) {
-	// This may occur at the beginning of replay.
-	LOG_INFO("%s: Unknown syscall completed.", this->label().c_str());
-	return;
+		// This may occur at the beginning of replay.
+		LOG_INFO("%s: Unknown syscall completed.", this->label().c_str());
+		return;
     }
 
     LOG_INFO("%s: syscall completed: %s", this->label().c_str(), this->syscall->c_str(true));
@@ -72,12 +68,15 @@ void ProcInfo::syscall_end(CPUState *env) {
 
     // Handle cases based on the prov_tracer specific nr.
     // Using this custom nr is meant to simplify handling.
+	// For open/close, only FileInfo entries are created.
+	// Actual provenance is dumped when process exits.
     switch(syscalls[this->syscall->nr].nr) {
 	case SYSCALL_OPEN:
 	{
-	    // open failed
+	    // Check return status.
 	    if (unlikely(rval < 0)) break;
 
+		// Retrieve arguments.
 	    arg = this->syscall->get_arg(0, 128);
 	    PERMIT_UNUSED char *filename = arg.sval;
 	    arg = this->syscall->get_arg(1, 0);
@@ -85,31 +84,61 @@ void ProcInfo::syscall_end(CPUState *env) {
 	    //arg = this->syscall->get_arg(2, 0);
 	    //PERMIT_UNUSED int mode = arg.intval;
 
-	    PROVLOG_OPEN(this->p.asid, filename, flags);
-	    g_free(filename);
+		// Check for existing mapping for fd.
+		// This may (?) happen if fd closed due to an error.
+		auto fdpair = this->fmap.find(rval);
+		if (unlikely(fdpair != this->fmap.end())) {
+			LOG_WARN("%s: fd %d is already mapped to %s.", this->label().c_str(), rval, (*fdpair).second->name);
+			this->fhist.push_back( (*fdpair).second );
+			this->fmap.erase(fdpair);
+		}
+
+		// Add new fd mapping.
+		this->fmap.insert(std::make_pair(rval, new FileInfo(filename, flags)));
 	}
 	break;
 
 	case SYSCALL_CLOSE:
 	{
+	    // Check return status.
+	    if (unlikely(rval < 0)) break;
 
+		// Retrieve arguments.
+	    arg = this->syscall->get_arg(0, 0);
+	    PERMIT_UNUSED int fd = arg.intval;
+
+		// Move file to history.
+		auto fdpair = this->fmap.find(fd);
+		if (unlikely(fdpair == this->fmap.end())) {
+			LOG_WARN("%s: no mapping found for fd %d during %s.", this->label().c_str(), fd, this->syscall->get_name());
+			break;
+		}
+		this->fhist.push_back( (*fdpair).second );
+		this->fmap.erase(fdpair);
 	}
 	break;
 
 	case SYSCALL_READ:
 	{
-	    // nothing read
+	    // Check return status.
 	    if (unlikely(rval <= 0)) break;
 
+		// Retrieve arguments.
 	    arg = this->syscall->get_arg(0, 0);
 	    PERMIT_UNUSED int fd = arg.intval;
 	    //arg = this->syscall->get_arg(1, 128);
 	    //PERMIT_UNUSED uint8_t *buf = arg.buf;
-	    //arg = this->syscall->get_arg(2, 0);
-	    //PERMIT_UNUSED int count = arg.intval;
-
-	    //PROVLOG_READ(this->p.asid, fd);
 	    //g_free(buf);
+	    arg = this->syscall->get_arg(2, 0);
+	    PERMIT_UNUSED int count = arg.intval;
+
+		// Increase the read count for the file.
+		auto fdpair = this->fmap.find(fd);
+		if (unlikely(fdpair == this->fmap.end())) {
+			LOG_WARN("%s: no mapping found for fd %d during %s.", this->label().c_str(), fd, this->syscall->get_name());
+			break;
+		}
+		(*fdpair).second->read += rval;
 	}
 	break;
 

@@ -1,5 +1,12 @@
 #ifndef PROCESSINFO_H
 #define PROCESSINFO_H
+extern "C" {
+#include "../osi/osi_types.h"		/**< Introspection data types. */
+#include "syscalls/syscallents.h"
+}
+#include <glib.h>
+#include <unordered_map>
+#include <vector>
 
 class FileInfo;
 class SyscallInfo;
@@ -7,13 +14,20 @@ class ProcInfo;
 
 class FileInfo {
 	public:
-		FileInfo(char *name);
+		FileInfo(char *name, int flags);
+		~FileInfo();
 
-		std::string name;
-		bool written = false;
-		bool read = false;
+		// file data
+		char *name;
+		int flags;
+
+		// accounting information
+		unsigned int written;
+		unsigned int read;
+		bool truncated;
 };
 typedef std::unordered_map<int, FileInfo *> FDMap;
+typedef std::vector<FileInfo *> FileInfoVector;
 
 
 /**
@@ -57,7 +71,8 @@ class ProcInfo {
 
 		OsiProc p;				/**< OsiProc struct. */
 		bool is_fresh = true;	/**< Process is still "fresh". */
-		FDMap fd;
+		FDMap fmap;
+		FileInfoVector fhist;
 
 	private:
 		SyscallInfo *syscall;
