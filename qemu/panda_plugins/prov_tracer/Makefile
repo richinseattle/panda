@@ -23,27 +23,19 @@ SYSCALLENTS_DL=$(foreach f,\
 	$(PLUGIN_TARGET_DIR)/panda_$(PLUGIN_NAME)_$(f)\
 )
 
-	#$(subst .c,.so,$(wildcard syscalls/syscallents_*.c)),\
 # All object files used by the plugin.
-PLUGIN_OBJ_DIR=$(PLUGIN_TARGET_DIR)/$(PLUGIN_NAME)
 PLUGIN_OBJFILES=$(PLUGIN_OBJ_DIR)/$(PLUGIN_NAME).o\
 				$(PLUGIN_OBJ_DIR)/process_info.o\
 				$(PLUGIN_OBJ_DIR)/syscall_info.o\
 				$(PLUGIN_OBJ_DIR)/file_info.o
 
-.PHONY: all checkflags
-
-$(PLUGIN_OBJ_DIR):
-	@[ -d  $@ ] || mkdir -p $@
+.PHONY: all
 
 $(PLUGIN_TARGET_DIR)/panda_$(PLUGIN_NAME)_syscallents_%.so: syscalls/syscallents_%.c
 	$(call quiet-command,$(CC) -shared -o $@ $^,"  SYSCALL DEFS  $@")
-
-$(PLUGIN_OBJ_DIR)/%.o: $(PLUGIN_SRC_ROOT)/$(PLUGIN_NAME)/%.cpp
 
 $(PLUGIN_TARGET_DIR)/panda_$(PLUGIN_NAME).so: $(PLUGIN_OBJFILES)
 	$(call quiet-command,$(CXX) $(filter-out $(CXXFLAGS_EXCLUDE), $(QEMU_CFLAGS)) -shared -o $@ $^ $(LIBS),"  PLUGIN  $@")
 
 all: $(PLUGIN_OBJ_DIR) $(SYSCALLENTS_DL) $(PLUGIN_TARGET_DIR)/panda_$(PLUGIN_NAME).so
-	echo $(PLUGIN_OBJFILES)
 
