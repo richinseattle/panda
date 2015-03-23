@@ -19,16 +19,20 @@ FileInfo::FileInfo(char *name, int flags) {
 	this->flags = flags;
 	this->written = 0;
 	this->read = 0;
-	this->truncated = false;
-
-	// Check for truncation.
-	if ( (this->flags & O_WRONLY) || (this->flags & O_RDWR) ) {
-		if (this->flags & O_TRUNC) {
-			this->truncated = true;
-		}
-	}
 }
 
 FileInfo::~FileInfo() {
 	g_free(this->name);
 }
+
+bool FileInfo::flag_set(char c) const {
+	if (c == 'w')
+		return ( (this->flags & O_WRONLY) || (this->flags & O_RDWR) );
+	else if (c == 'r')
+		return ( !(this->flags & O_WRONLY) );
+	else if (c == 't')
+		return ( ((this->flags & O_WRONLY) || (this->flags & O_RDWR)) && (this->flags & O_TRUNC) );
+	else
+		return false;
+}
+

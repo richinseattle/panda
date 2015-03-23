@@ -36,32 +36,43 @@ extern off_t stdcount[STDFD_MAX];
 /**** output macros and inlines ***********************************/
 
 /* inline functions for raw provenance logging */
-static inline void PROVLOG_OPEN(const TARGET_PTR asid, const char *filename, const int flags) {
-#if 0
-#endif
-}
-static inline void PROVLOG_READ(const TARGET_PTR asid, const char *filename) {
-
-}
-static inline void PROVLOG_WRITE(const TARGET_PTR asid, const char *filename) {
-
-}
-	
-	//prov_out << "o:" << asid << ":" << filename << std::endl;
-#if 0
-	// Unless the the O_WRONLY flag is on, the file descriptor can be read.
-	if (! (flags&O_WRONLY) )
-		prov_out << "u:" << "the real exename"  << ":" << fdname << std::endl;
-	
-	// Emit a generated line if needed.
-#endif
-static inline void PROVLOG_CLOSE(const ufd_t ufd) {
-	prov_out << "c:ufd" << ufd << std::endl;
-}
 static inline void PROVLOG_EXEC(const ProcInfo *pi) {
-	prov_out << "x:" << pi->p.asid << ":" << pi->p.pid << std::endl;
+	prov_out << "x:" << pi->p.asid << ":" << pi->label() << std::endl;
 }
 static inline void PROVLOG_QUIT(const ProcInfo *pi) {
-	prov_out << "q:" << pi->p.asid << ":" << pi->p.pid << ":" << pi->p.name << std::endl;
+	prov_out << "q:" << pi->p.asid << ":" << pi->label() << std::endl;
+}
+static inline void PROVLOG_P2F(const ProcInfo *pi, const FileInfo *fi, const char mode) {
+	switch(mode) {
+		case 'g':
+			prov_out << "g:"
+				<< pi->p.asid << ":" << pi->label() << ":"
+				<< fi->name << ":" << fi->written
+			<< std::endl;
+		break;
+		case 'u':
+			prov_out << "u:"
+				<< pi->p.asid << ":" << pi->label() << ":"
+				<< fi->name << ":" << fi->read
+			<< std::endl;
+		break;
+		default:
+			prov_out << "# unused file:"
+				<< pi->p.asid << ":" << pi->label() << ":" << fi->name
+				<< ":r" << fi->read << ":w" << fi->written << ":f" << fi->flags
+			<< std::endl;
+		break;
+	}
+}
+static inline void PROVLOG_F2F(const ProcInfo *pi, const FileInfo *fi1, const FileInfo *fi2, const char mode) {
+	switch(mode) {
+		case 'd':
+			prov_out << "d:" << fi1->name << ":" << fi2->name << std::endl;
+		break;
+
+		default:
+			prov_out << "# dcomment:" << fi1->name << ":" << fi2->name << std::endl;
+		break;
+	}
 }
 #endif

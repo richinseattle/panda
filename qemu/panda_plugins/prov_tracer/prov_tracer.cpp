@@ -355,7 +355,7 @@ error0:
 
 void uninit_plugin(void *self) {
     // delete ProcessInfo objects to dump pending prov
-    prov_out << "# dumping pending items" << std::endl;
+    prov_out << "# end of replay - dumping pending items" << std::endl;
     for (auto pi_it=pimap.begin(); pi_it!=pimap.end(); ++pi_it) {
 	delete (*pi_it).second;
     }

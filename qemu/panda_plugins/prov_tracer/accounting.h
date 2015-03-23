@@ -16,6 +16,7 @@ class FileInfo {
 	public:
 		FileInfo(char *name, int flags);
 		~FileInfo();
+		bool flag_set(char c) const;
 
 		// file data
 		char *name;
@@ -24,7 +25,6 @@ class FileInfo {
 		// accounting information
 		unsigned int written;
 		unsigned int read;
-		bool truncated;
 };
 typedef std::unordered_map<int, FileInfo *> FDMap;
 typedef std::vector<FileInfo *> FileInfoVector;
@@ -70,11 +70,12 @@ class ProcInfo {
 		void syscall_end(CPUState *env);
 
 		OsiProc p;				/**< OsiProc struct. */
-		bool is_fresh = true;	/**< Process is still "fresh". */
+		bool is_fresh;			/**< Process is still "fresh". */
 		FDMap fmap;
 		FileInfoVector fhist;
 
 	private:
+		bool logged;
 		SyscallInfo *syscall;
 
 };

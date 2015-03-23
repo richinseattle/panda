@@ -23,31 +23,77 @@ extern struct syscall_entry *syscalls;      /**< Syscalls info table. */
 ProcInfo::ProcInfo(OsiProc *p) {
 	copy_osiproc_g(p, &this->p);
 	this->syscall = NULL;
+	this->is_fresh = true;
+	this->logged = false;
 
-	PROVLOG_EXEC(this);
+	// Don't log exec here. Process is still fresh.
+	//PROVLOG_EXEC(this);
 }
 
 ProcInfo::~ProcInfo(void) {
-	PROVLOG_QUIT(this);
+	// Move currently open files to history.
+	for (auto fdpair=this->fmap.begin(); fdpair!=this->fmap.end(); ++fdpair) {
+		this->fhist.push_back( (*fdpair).second );
+		this->fmap.erase(fdpair);
+	}
 
+	// Dump provenance for files.
+	for (auto f_it=this->fhist.begin(); f_it!=this->fhist.end(); ++f_it) {
+		// Dump process-file provenance relations.
+		auto f = *f_it;
+		bool fw = (f->flag_set('w') && (f->written > 0));
+		bool fr = (f->flag_set('r') && (f->read > 0));
+
+		if (f->flag_set('t')) {
+			PROVLOG_P2F(this, f, 'g');
+		}
+		else if (fw) {
+			PROVLOG_P2F(this, f, 'g');
+		}
+		else if (fr) {
+			PROVLOG_P2F(this, f, 'u');
+		}
+		else {
+			PROVLOG_P2F(this, f, '#');
+		}
+
+		for (auto g_it=this->fhist.begin(); g_it!=this->fhist.end(); ++g_it) {
+			// Dump file-file provenance relations.
+			auto g = *g_it;
+			bool gw = (f->flag_set('w') && (f->written > 0));
+			bool gr = (f->flag_set('r') && (f->read > 0));
+
+			// Comment the following line to produce a derivation edge
+			// to itself for each file that was both read from and written to.
+			if (g_it == f_it) { continue; }
+
+			if (fr && gw) { PROVLOG_F2F(this, f, g, 'd'); }
+			if (gr && fw) { PROVLOG_F2F(this, g, f, 'd'); }
+		}
+	}
+
+	// Cleanup file history.
+
+	PROVLOG_QUIT(this);
 	g_free(this->p.name);
 	if (this->syscall != NULL) delete this->syscall;
 }
 
 std::string ProcInfo::label() const {
     std::stringstream ss;
-    ss << this->p.name << (this->is_fresh ? "*(" : "(") << this->p.pid << ")";
+    //ss << this->p.name << (this->is_fresh ? "*(" : "(") << this->p.pid << ")";
+    ss << this->p.name << ';' << this->p.pid << (this->is_fresh ? "*" : "");
     return ss.str();
 }
 
 void ProcInfo::syscall_start(CPUState *env) {
 #if defined(TARGET_I386)
-    if (this->syscall != NULL) {
-	LOG_WARN("%s: \"%s\" was pending when \"%s\" (" TARGET_FMT_ld ") started!",
-		this->label().c_str(), this->syscall->get_name(),
-		SyscallInfo(this, env).get_name(), env->regs[R_EAX]
-	);
-	delete this->syscall;
+    if (unlikely(this->syscall != NULL)) {
+		LOG_WARN("%s: \"%s\" was pending when \"%s\" (" TARGET_FMT_ld ") started!",
+			this->label().c_str(), this->syscall->get_name(),
+			SyscallInfo(this, env).get_name(), env->regs[R_EAX]
+		);
+		delete this->syscall;
     }
     this->syscall = new SyscallInfo(this, env);
 #endif
@@ -65,12 +111,22 @@ void ProcInfo::syscall_end(CPUState *env) {
 
     int rval = this->syscall->get_ret();
     union syscall_arg arg;
+    int nr = syscalls[this->syscall->nr].nr;
+
+	// Emit provenance for program here.
+	// This has two benefits:
+	//	a. The program name has been updated (i.e. is_fresh is false).
+	//	b. Programs that don't make any system calls will not be reported.
+	if (!this->logged && !this->is_fresh) {
+		PROVLOG_EXEC(this);
+		this->logged = true;
+	}
 
     // Handle cases based on the prov_tracer specific nr.
     // Using this custom nr is meant to simplify handling.
 	// For open/close, only FileInfo entries are created.
 	// Actual provenance is dumped when process exits.
-    switch(syscalls[this->syscall->nr].nr) {
+    switch(nr) {
 	case SYSCALL_OPEN:
 	{
 	    // Check return status.
@@ -119,6 +175,7 @@ void ProcInfo::syscall_end(CPUState *env) {
 	break;
 
 	case SYSCALL_READ:
+	case SYSCALL_WRITE:
 	{
 	    // Check return status.
 	    if (unlikely(rval <= 0)) break;
@@ -132,19 +189,20 @@ void ProcInfo::syscall_end(CPUState *env) {
 	    arg = this->syscall->get_arg(2, 0);
 	    PERMIT_UNUSED int count = arg.intval;
 
-		// Increase the read count for the file.
+		// Retrieve FileInfo.
 		auto fdpair = this->fmap.find(fd);
 		if (unlikely(fdpair == this->fmap.end())) {
 			LOG_WARN("%s: no mapping found for fd %d during %s.", this->label().c_str(), fd, this->syscall->get_name());
 			break;
 		}
-		(*fdpair).second->read += rval;
-	}
-	break;
 
-	case SYSCALL_WRITE:
-	{
-
+		// Increase the proper counter for the file.
+		if (nr == SYSCALL_READ)
+			(*fdpair).second->read += rval;
+		else if (nr == SYSCALL_WRITE)
+			(*fdpair).second->written += rval;
+		else
+			EXIT_ON_ERROR(1 == 1, "Don't drink and code.");
 	}
 	break;
 
