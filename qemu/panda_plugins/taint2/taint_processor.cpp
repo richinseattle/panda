@@ -22,7 +22,6 @@ PANDAENDCOMMENT */
 #include "panda_memlog.h"
 #include "guestarch.h"
 
-#include "my_mem.h"
 #include "shad_dir_32.h"
 #include "shad_dir_64.h"
 #include "max.h"
@@ -91,7 +90,7 @@ Addr make_greg(uint64_t r, uint16_t off) {
  */
 Shad *tp_init(TaintLabelMode mode, TaintGranularity granularity) {
     //    Shad *shad = (Shad *) my_malloc(sizeof(Shad), poolid_taint_processor);
-    void *tmp = my_malloc(sizeof(Shad), poolid_taint_processor);
+    void *tmp = malloc(sizeof(Shad));
     Shad *shad = new(tmp) Shad;
     shad->port_size = 0xffff * 4; // assume a max port size of 4 bytes,
         // and 0xffff max ports according to Intel manual
@@ -138,7 +137,7 @@ void tp_free(Shad *shad){
     delete shad->ret;
     delete shad->grv;
     delete shad->gsv;
-    my_free(shad, sizeof(Shad), poolid_taint_processor);
+    free(shad);
 }
 
 // returns a copy of the labelset associated with a.  or NULL if none.
@@ -172,31 +171,34 @@ LabelSetP tp_labelset_get(Shad *shad, Addr *a) {
 }
 
 // returns std::set of labels.
-std::set<uint32_t> tp_query(Shad *shad, Addr *a) {
+LabelSetP tp_query(Shad *shad, Addr *a) {
     assert (shad != NULL);
     LabelSetP ls = tp_labelset_get(shad, a);
-
-    return label_set_render_set(ls);
+    return ls;
 }
 
-// returns label set cardinality
-uint32_t tp_query_ram(Shad *shad, uint64_t pa) {
+
+// returns rendered label set 
+LabelSetP tp_query_ram(Shad *shad, uint64_t pa) {
     Addr a = make_maddr(pa);
-    return tp_query(shad, &a).size();
+    return tp_query(shad, &a);
 }
 
-// returns label set cardinality
-uint32_t tp_query_reg(Shad *shad, int reg_num, int offset) {
+// returns rendered label set 
+LabelSetP tp_query_reg(Shad *shad, int reg_num, int offset) {
     Addr a = make_greg(reg_num, offset);
-    return tp_query(shad, &a).size();
+    return tp_query(shad, &a);
 }
 
-// returns label set cardinality
-uint32_t tp_query_llvm(Shad *shad, int reg_num, int offset) {
+// returns rendered label set
+LabelSetP tp_query_llvm(Shad *shad, int reg_num, int offset) {
     Addr a = make_laddr(reg_num, offset);
-    return tp_query(shad, &a).size();
+    return tp_query(shad, &a);
 }
 
+uint32_t ls_card(LabelSetP ls) {
+    return label_set_render_set(ls).size();
+}
 
 
 
@@ -208,20 +210,15 @@ void tp_lsr_iter(std::set<uint32_t> rendered, int (*app)(uint32_t el, void *stuf
     }
 }
     
-
-
-// memoize rendering of label sets into actual sets
-std::map < LabelSet *, std::set < uint32_t > > memoize_ls_rend;
-
 // retrieve ls for this addr
-void tp_ls_iter(LabelSet *ls, int (*app)(uint32_t el, void *stuff1), void *stuff2) {
+void tp_ls_iter(LabelSetP ls, int (*app)(uint32_t el, void *stuff1), void *stuff2) {
     std::set<uint32_t> rendered = label_set_render_set(ls);
     tp_lsr_iter(rendered, app, stuff2);
 }
 
 void tp_ls_a_iter(Shad *shad, Addr *a, int (*app)(uint32_t el, void *stuff1), void *stuff2) {
     // retrieve the tree-representation of the 
-    LabelSet *ls = tp_labelset_get(shad, a);
+    LabelSetP ls = tp_labelset_get(shad, a);
     if (ls == NULL) return;
     tp_ls_iter(ls, app, stuff2);
 }
@@ -368,17 +365,37 @@ void addr_spit(Addr *a) {
   printf (",%d,%x)", a->off, a->flag);
 }
 
-    
+
+// used to keep track of labels that have been applied
+std::set < uint32_t > labels_applied;
 
 // label -- associate label l with address a
 void tp_label(Shad *shad, Addr *a, uint32_t l) {
     assert (shad != NULL);
-
     LabelSetP ls = tp_labelset_get(shad, a);
     LabelSetP ls2 = label_set_singleton(l);
     LabelSetP result = label_set_union(ls, ls2);
     tp_labelset_put(shad, a, result);
+    labels_applied.insert(l);
 }
+
+
+// returns set of so-far applied labels as a sorted array
+// NB: This allocates memory. Caller frees.
+uint32_t *tp_labels_applied(void) {
+    uint32_t *labels = (uint32_t *) malloc(sizeof(uint32_t) * labels_applied.size());
+    uint32_t i=0;
+    for ( auto el : labels_applied ) {
+        labels[i] = el;
+        i++;
+    }
+    return labels;
+}
+
+uint32_t tp_num_labels_applied(void) {
+    return labels_applied.size();
+}
+
 
 void tp_label_ram(Shad *shad, uint64_t pa, uint32_t l) {
     Addr a = make_maddr(pa);

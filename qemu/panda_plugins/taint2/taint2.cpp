@@ -36,9 +36,11 @@ extern "C" {
 #include "qemu-common.h"
 #include "cpu-all.h"
 #include "panda_plugin.h"
+#include "panda_plugin_plugin.h"
 #include "panda_common.h"
 #include "panda/network.h"
 #include "rr_log.h"
+#include "pandalog.h"
 #include "cpu.h"
 
 extern int loglevel;
@@ -60,6 +62,11 @@ void taint2_labelset_reg_iter(int reg_num, int offset, int (*app)(uint32_t el, v
 void taint2_labelset_llvm_iter(int reg_num, int offset, int (*app)(uint32_t el, void *stuff1), void *stuff2);
 void taint2_labelset_iter(LabelSetP ls,  int (*app)(uint32_t el, void *stuff1), void *stuff2) ;
 
+uint32_t *taint2_labels_applied(void);
+uint32_t taint2_num_labels_applied(void);
+
+void taint2_track_taint_state(void);
+
 }
 
 #include <llvm/PassManager.h>
@@ -77,6 +84,8 @@ void taint2_labelset_iter(LabelSetP ls,  int (*app)(uint32_t el, void *stuff1), 
 #include "fast_shad.h"
 #include "taint_ops.h"
 #include "taint2.h"
+
+#include "pirate_mark_lava_struct.h"
 
 // These need to be extern "C" so that the ABI is compatible with
 // QEMU/PANDA, which is written in C
@@ -97,6 +106,12 @@ int phys_mem_write_callback(CPUState *env, target_ulong pc, target_ulong addr,
                        target_ulong size, void *buf);
 int phys_mem_read_callback(CPUState *env, target_ulong pc, target_ulong addr,
         target_ulong size, void *buf);
+
+void taint_state_changed(void);
+PPP_PROT_REG_CB(on_taint_change);
+PPP_CB_BOILERPLATE(on_taint_change);
+
+bool track_taint_state = false;
 
 }
 
@@ -314,6 +329,31 @@ void arm_hypercall_callback(CPUState *env){
 }
 #endif //TARGET_ARM
 
+
+int label_spit(uint32_t el, void *stuff) {
+    printf ("%d ", el);
+    return 0;
+}
+
+
+#define MAX_EL_ARR_IND 1000000
+uint32_t el_arr_ind = 0;
+
+// used by hypercall to pack pandalog array with query result
+int collect_query_labels_pandalog(uint32_t el, void *stuff) {
+    uint32_t *label = (uint32_t *) stuff;
+    assert (el_arr_ind < MAX_EL_ARR_IND);
+    label[el_arr_ind++] = el;
+    return 0;
+}
+
+
+
+static uint32_t ii = 0;
+
+
+std::set < LabelSetP > ls_returned;
+
 #ifdef TARGET_I386
 // Support all features of label and query program
 void i386_hypercall_callback(CPUState *env){
@@ -352,13 +392,101 @@ void i386_hypercall_callback(CPUState *env){
 
     // Query op.
     // EBX contains addr.
-    if (env->regs[R_EAX] == 9) {
+    if (env->regs[R_EAX] == 9) {        
+        if (taintEnabled && (taint2_num_labels_applied() > 0)){
+            // phys addr
+            target_ulong addr = panda_virt_to_phys(env, env->regs[R_EBX]);
+            if ((int)addr == -1) {
+                printf ("taint2: query of unmapped addr?:  vaddr=0x%x paddr=0x%x\n",
+                        (uint32_t) EBX, (uint32_t) addr);
+            }
+            else {
+                printf ("taint enabled AND we have applied some labels AND addr for this query isnt garbage\n");
+                LabelSetP ls = tp_query_ram(shadow, addr);
+                if (ls) {
+                    if (pandalog) {
+                        ii ++;
+                        printf ("pandalogging taint query\n");
+                        // we only want to actually write a particular set contents to pandalog once
+                        if (ls_returned.count(ls) == 0) {
+                            // this ls hasn't yet been written to pandalog
+                            // write out mapping from ls pointer to labelset contents
+                            // as its own separate log entry
+                            ls_returned.insert(ls);
+                            Panda__TaintQueryUniqueLabelSet *tquls = (Panda__TaintQueryUniqueLabelSet *) malloc (sizeof (Panda__TaintQueryUniqueLabelSet));
+                            *tquls = PANDA__TAINT_QUERY_UNIQUE_LABEL_SET__INIT;
+                            tquls->ptr = (uint64_t) ls;
+                            tquls->n_label = ls_card(ls);
+                            tquls->label = (uint32_t *) malloc (sizeof(uint32_t) * tquls->n_label);
+                            el_arr_ind = 0;
+                            tp_ls_iter(ls, collect_query_labels_pandalog, (void *) tquls->label);
+                            Panda__LogEntry ple = PANDA__LOG_ENTRY__INIT;
+                            ple.taint_query_unique_label_set = tquls;
+                            pandalog_write_entry(&ple);
+                            free (tquls->label);
+                            free (tquls);
+                        }
+                        // safe to refer to the set by the pointer in this next message
+                        Panda__TaintQuery *tq = (Panda__TaintQuery *) malloc(sizeof(Panda__TaintQuery));
+                        *tq = PANDA__TAINT_QUERY__INIT;
+                        tq->asid = panda_current_asid(env);
+                        tq->ptr = (uint64_t) ls;
+                        Panda__LogEntry ple = PANDA__LOG_ENTRY__INIT;
+                        ple.taint_query = tq;
+                        pandalog_write_entry(&ple);
+                        free(tq);
+                        if (ii == 100){
+                            //                            panda_end_replay();
+                        }
+                    }
+                    else {
+                        printf("taint2: Query operation detected @ %lu. vaddr=0x%x paddr=0x%x\n",
+                               rr_get_guest_instr_count(), (uint32_t) EBX, (uint32_t) addr);
+                        
+                        uint32_t num_labels = taint2_query_ram(addr);
+                        printf("taint2: Queried %lx[%lx]\n", (uint64_t)shadow->ram,
+                               (uint64_t)addr);
+                        printf("taint2: %u labels.\n", num_labels);
+                        qemu_log_mask(CPU_LOG_TAINT_OPS, "query: %lx[%lx]\n",
+                                      (uint64_t)shadow->ram, (uint64_t)addr);
+                        if (num_labels > 0) {
+                            printf ("labels: ");
+                            tp_ls_ram_iter(shadow, addr, label_spit, NULL);
+                            printf ("\n");
+                        }
+                    }
+                }
+            }
+        }
+    }
+    
+    // LAVA Query op.
+    // EBX contains addr.
+    if (env->regs[R_EAX] == 11) {
         target_ulong addr = panda_virt_to_phys(env, env->regs[R_EBX]);
+        PirateMarkLavaInfo pmli = {};
+        char filenameStr[500];
+        char astNodeStr[500];
         if (taintEnabled){
             printf("taint2: Query operation detected @ %lu.\n",
                     rr_get_guest_instr_count());
             //uint64_t array;
             //label_set_iter(FastShad::query(shadow->ram, addr), record_bit, &array);
+            
+            // TODO some way to do error checking/handling?
+            panda_virtual_memory_rw(env, env->regs[R_ESI],
+                (uint8_t*)&pmli, sizeof(PirateMarkLavaInfo), false);
+            panda_virtual_memory_rw(env, pmli.filenamePtr,
+                (uint8_t*)&filenameStr, 500, false);
+            pmli.filenamePtr = (uint64_t)filenameStr;
+            panda_virtual_memory_rw(env, pmli.astNodePtr,
+                (uint8_t*)&astNodeStr, 500, false);
+            pmli.astNodePtr = (uint64_t)astNodeStr;
+            printf("LAVA Query Info:\n");
+            printf("File name: %s\n", (char*)pmli.filenamePtr);
+            printf("Line number: %lu\n", pmli.lineNum);
+            printf("AST node: %s\n\n", (char*)pmli.astNodePtr);
+            
             printf("taint2: %u labels.\n", taint2_query_ram(addr));
             printf("taint2: Queried %lx[%lx]\n", (uint64_t)shadow->ram,
                     (uint64_t)addr);
@@ -366,8 +494,8 @@ void i386_hypercall_callback(CPUState *env){
                     (uint64_t)shadow->ram, (uint64_t)addr);
             //label_set_iter(FastShad::query(shadow->ram, addr),
                     //print_labels, NULL);
-            printf("taint2: Stopping replay.\n");
-            rr_do_end_replay(0);
+            //printf("taint2: Stopping replay.\n");
+            //rr_do_end_replay(0);
         }
     }
 }
@@ -385,6 +513,11 @@ int guest_hypercall_callback(CPUState *env){
     return 1;
 }
 
+// Called whenever the taint state changes.
+void taint_state_changed() {
+    PPP_RUN_CB(on_taint_change);
+}
+
 bool __taint2_enabled() {
     return taintEnabled;
 }
@@ -397,16 +530,28 @@ void __taint2_label_ram(uint64_t pa, uint32_t l) {
 // if phys addr pa is untainted, return 0.
 // else returns label set cardinality
 uint32_t __taint2_query_ram(uint64_t pa) {
-    return tp_query_ram(shadow, pa);
+    LabelSetP ls = tp_query_ram(shadow, pa);
+    return ls_card(ls);
 }
 
 
 uint32_t __taint2_query_reg(int reg_num, int offset) {
-    return tp_query_reg(shadow, reg_num, offset);
+    LabelSetP ls = tp_query_reg(shadow, reg_num, offset);
+    return ls_card(ls);
 }
 
 uint32_t __taint2_query_llvm(int reg_num, int offset) {
-    return tp_query_llvm(shadow, reg_num, offset);
+    LabelSetP ls = tp_query_llvm(shadow, reg_num, offset);
+    return ls_card(ls);
+}
+
+
+uint32_t *__taint2_labels_applied(void) {
+    return tp_labels_applied();
+}
+
+uint32_t __taint2_num_labels_applied(void) {
+    return tp_num_labels_applied();
 }
 
 
@@ -443,6 +588,10 @@ void __taint2_labelset_reg_iter(int reg_num, int offset, int (*app)(uint32_t el,
 
 void __taint2_labelset_llvm_iter(int reg_num, int offset, int (*app)(uint32_t el, void *stuff1), void *stuff2) {
     tp_ls_llvm_iter(shadow, reg_num, offset, app, stuff2);
+}
+
+void __taint2_track_taint_state(void) {
+    track_taint_state = true;
 }
 
 
@@ -502,12 +651,22 @@ void taint2_labelset_llvm_iter(int reg_num, int offset, int (*app)(uint32_t el, 
     __taint2_labelset_llvm_iter(reg_num, offset, app, stuff2);
 }
 
+uint32_t *taint2_labels_applied(void) {
+    return __taint2_labels_applied();
+}
+
+
+uint32_t taint2_num_labels_applied(void) {
+    return __taint2_num_labels_applied();
+}
+
+void taint2_track_taint_state(void) {
+    __taint2_track_taint_state();
+}
 
 
 ////////////////////////////////////////////////////////////////////////////////////
 int before_block_exec(CPUState *env, TranslationBlock *tb) {
-    //printf("%s\n", tb->llvm_function->getName().str().c_str());
-    //FPM->run(*(tb->llvm_function));
     return 0;
 }
 bool before_block_exec_invalidate_opt(CPUState *env, TranslationBlock *tb) {

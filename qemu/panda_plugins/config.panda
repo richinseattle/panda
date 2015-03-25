@@ -25,4 +25,5 @@ asidstory
 file_taint
 win7proc
 ida_taint
-prov_tracer
+tainted_instr
+pmemaccess

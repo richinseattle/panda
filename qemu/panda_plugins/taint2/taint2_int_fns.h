@@ -4,8 +4,9 @@
 
 
 #include <stdint.h>
+#include <stdbool.h>
 
-typedef struct LabelSet *LabelSetP;
+typedef void *LabelSetP;
 
 
 // turns on taint
@@ -48,5 +49,15 @@ void taint2_labelset_llvm_iter(int reg_num, int offset, int (*app)(uint32_t el, 
 // ditto, but someone handed you the ls, e.g. a callback like tainted branch
 void taint2_labelset_iter(LabelSetP ls,  int (*app)(uint32_t el, void *stuff1), void *stuff2) ;
 
+
+// returns set of so-far applied labels as a sorted array
+// NB: This allocates memory. Caller frees.
+uint32_t *taint2_labels_applied(void);
+
+// just tells how big that labels_applied set will be
+uint32_t taint2_num_labels_applied(void);
+
+// Track whether taint state actually changed during a BB
+void taint2_track_taint_state(void);
 
 #endif                                                                                   
