@@ -30,7 +30,7 @@
  * is found at the beggining of the buffer, this string will be returned.
  * Otherwise, `n` bytes will be returned formatted as a hex string.
  */
-const char *panda_virtual_memory_smart_read(CPUState *env, target_ulong addr, size_t n);
+std::string panda_virtual_memory_smart_read(CPUState *env, target_ulong addr, size_t n);
 
 /*!
  * @brief The number of printable characters at the beginning of a buffer

@@ -73,7 +73,7 @@ union syscall_arg SyscallInfo::get_arg(int n, size_t sz) const {
 	break;
 
 	case SYSCALL_ARG_STR:
-	    r.sval = g_strdup(panda_virtual_memory_smart_read(this->env, this->args[n].pval, sz));
+	    r.sval = g_strdup(panda_virtual_memory_smart_read(this->env, this->args[n].pval, sz).c_str());
 	break;
 
 	case SYSCALL_ARG_PTR:
@@ -103,7 +103,7 @@ std::ostream& SyscallInfo::dump(std::ostream& o) const {
 
         switch (syscalls[this->nr].args[i]) {
             case SYSCALL_ARG_INT:
-                o << std::dec << (target_int)this->args[i].intval;
+                o   << std::dec << (target_int)this->args[i].intval;
             break;
 
             case SYSCALL_ARG_PTR:
@@ -129,7 +129,7 @@ std::ostream& SyscallInfo::dump(std::ostream& o) const {
 }
 
 std::string SyscallInfo::str(bool include_rval) const {
-    std::stringstream ss;
+    std::ostringstream ss;
 #if defined(TARGET_I386)
     if (include_rval)
 	ss << (target_int)env->regs[R_EAX] << " = ";
@@ -139,31 +139,9 @@ std::string SyscallInfo::str(bool include_rval) const {
 }
 
 std::string SyscallInfo::str() const {
-    std::stringstream ss;
+    std::ostringstream ss;
     ss << this;
     return ss.str();
-}
-
-const char *SyscallInfo::c_str(bool include_rval) const {
-    std::stringstream ss;
-#if defined(TARGET_I386)
-    if (include_rval)
-	ss << (target_int)env->regs[R_EAX] << " = ";
-#endif
-    ss << this;
-
-    // The pointer returned by c_str() may be invalidated by further calls.
-    // It's caller's responsibility to copy the string before any such calls.
-    return ss.str().c_str();
-}
-
-const char *SyscallInfo::c_str() const {
-    std::stringstream ss;
-    ss << this;
-
-    // The pointer returned by c_str() may be invalidated by further calls.
-    // It's caller's responsibility to copy the string before any such calls.
-    return ss.str().c_str();
 }
 
 const char *SyscallInfo::get_name() const {

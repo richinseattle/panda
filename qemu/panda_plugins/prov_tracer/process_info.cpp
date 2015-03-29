@@ -81,8 +81,7 @@ ProcInfo::~ProcInfo(void) {
 }
 
 std::string ProcInfo::label() const {
-    std::stringstream ss;
-    //ss << this->p.name << (this->is_fresh ? "*(" : "(") << this->p.pid << ")";
+    std::ostringstream ss;
     ss << this->p.name << ';' << this->p.pid << (this->is_fresh ? "*" : "");
     return ss.str();
 }
@@ -108,7 +107,7 @@ void ProcInfo::syscall_end(CPUState *env) {
 		return;
     }
 
-    LOG_INFO("%s: syscall completed: %s", this->label().c_str(), this->syscall->c_str(true));
+    LOG_INFO("%s: syscall completed: %s", this->label().c_str(), this->syscall->str(true).c_str());
 
     int rval = this->syscall->get_ret();
     union syscall_arg arg;
@@ -145,7 +144,7 @@ void ProcInfo::syscall_end(CPUState *env) {
 		// This may (?) happen if fd closed due to an error.
 		auto fdpair = this->fmap.find(rval);
 		if (unlikely(fdpair != this->fmap.end())) {
-			LOG_WARN("%s: fd%d is already mapped to %s.", this->label().c_str(), rval, (*fdpair).second->name);
+			LOG_WARN("%s: fd%d is already mapped to %s.", this->label().c_str(), rval, (*fdpair).second->get_name());
 			this->fhist.push_back( (*fdpair).second );
 			this->fmap.erase(fdpair);
 		}

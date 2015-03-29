@@ -47,37 +47,36 @@ std::ofstream prov_out;			/**< Provenance output stream. */
 // ****************************************************************************
 // Helpers
 // ****************************************************************************
-const char *panda_virtual_memory_smart_read(CPUState *env, target_ulong addr, size_t n) {
-    std::stringstream ss;
+std::string panda_virtual_memory_smart_read(CPUState *env, target_ulong addr, size_t n) {
+    std::ostringstream ss;
     uint8_t *p = (uint8_t *)g_malloc(TARGET_PAGE_SIZE);
 
     size_t n_rd = 0;
     do {
 	// read next chunk of memory
-	int imax = n_rd + TARGET_PAGE_SIZE > n ? n-n_rd : TARGET_PAGE_SIZE;
-        if ( -1 == panda_virtual_memory_rw(env, addr, p, imax, 0) )
+	int chunk_sz = n_rd + TARGET_PAGE_SIZE > n ? n-n_rd : TARGET_PAGE_SIZE;
+        if ( -1 == panda_virtual_memory_rw(env, addr, p, chunk_sz, 0) )
             goto error;
 
 	// find printable chars at the beginning of the string
 	int j;
-	for (j=0; n_rd == 0 && j<imax && isprint(p[j]) && p[j]!='\0'; j++) {}
+	for (j=0; n_rd == 0 && j<chunk_sz && isprint(p[j]) && p[j]!='\0'; j++) {}
 
-	// print as string if at least 3 printable characters found
 	if (j>SMART_READ_MIN_STRLEN && p[j] == '\0') {
-	    ss << '"' << (char *)p << '"';
+	    // print as string if at least 3 printable characters were found
+	    ss << (char *)p;
 	    goto starts_w_string;
 	}
 	else if (! (strncmp((char *)p, ".", 2) && strncmp((char *)p, "..", 3)) ) {
-	    // special case -- allow "." and ".." strings
-	    // these are common when dealing with filenames
-	    ss << '"' << (char *)p << '"';
+	    // special case -- allow "." and ".." strings (useful for filenames)
+	    ss << (char *)p;
 	    goto starts_w_string;
 	}
-	else if (j == imax && p[j-1] != '\0') {
+	else if (j == chunk_sz && p[j-1] != '\0') {
 	    // all printable characters, but no terminator
 	    char c = (char)p[j-1];
 	    p[j-1] = '\0';
-	    ss << '"' << (char *)p << c << "\"...<cont>...";
+	    ss << (char *)p << c << "...<cont>...";
 	    p[j-1] = c;
 
 	    // XXX: This is not handled properly in the case where
@@ -90,25 +89,24 @@ const char *panda_virtual_memory_smart_read(CPUState *env, target_ulong addr, si
 	}
 	else { j = 0; }
 
-	ss << "[";
-
 	// continue printing as hex
-	for (int i = j; i<imax; i++) {
+	ss << "[";
+	for (int i = j; i<chunk_sz; i++) {
 	    if (i>j && (i%4 == 0)) ss << '|';
 	    ss << std::hex << std::setw(2) << std::setfill('0') << (int)p[i];
 	}
-	n_rd += imax;
+	n_rd += chunk_sz;
     } while(n_rd < n);
     ss << "]";
 
 starts_w_string:
     g_free(p);
-    return ss.str().c_str();
+    return ss.str();
 
 error:
     g_free(p);
     ss << "ERR";
-    return ss.str().c_str();
+    return ss.str();
 }
 
 

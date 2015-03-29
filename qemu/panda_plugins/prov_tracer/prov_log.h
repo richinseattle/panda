@@ -47,18 +47,18 @@ static inline void PROVLOG_P2F(const ProcInfo *pi, const FileInfo *fi, const cha
 		case 'g':
 			prov_out << "g:"
 				<< pi->p.asid << ":" << pi->label() << ":"
-				<< fi->name << ":" << fi->written
+				<< fi->get_name_escaped() << ":" << fi->written
 			<< std::endl;
 		break;
 		case 'u':
 			prov_out << "u:"
 				<< pi->p.asid << ":" << pi->label() << ":"
-				<< fi->name << ":" << fi->read
+				<< fi->get_name_escaped() << ":" << fi->read
 			<< std::endl;
 		break;
 		default:
 			prov_out << "# unused file:"
-				<< pi->p.asid << ":" << pi->label() << ":" << fi->name
+				<< pi->p.asid << ":" << pi->label() << ":" << fi->get_name_escaped() 
 				<< ":r" << fi->read << ":w" << fi->written << ":f" << fi->flags
 			<< std::endl;
 		break;
@@ -67,11 +67,11 @@ static inline void PROVLOG_P2F(const ProcInfo *pi, const FileInfo *fi, const cha
 static inline void PROVLOG_F2F(const ProcInfo *pi, const FileInfo *fi1, const FileInfo *fi2, const char mode) {
 	switch(mode) {
 		case 'd':
-			prov_out << "d:" << fi1->name << ":" << fi2->name << std::endl;
+			prov_out << "d:" << fi1->get_name_escaped() << ":" << fi2->get_name_escaped() << std::endl;
 		break;
 
 		default:
-			prov_out << "# dcomment:" << fi1->name << ":" << fi2->name << std::endl;
+			prov_out << "# dcomment:" << fi1->get_name_escaped() << ":" << fi2->get_name_escaped() << std::endl;
 		break;
 	}
 }

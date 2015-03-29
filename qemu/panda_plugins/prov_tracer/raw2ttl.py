@@ -62,7 +62,7 @@ class TagFormatError(Error):
 #### handlers for entry lines #######################################
 def process_c(data):
     global s
-    # line format: c:<ufd>
+    # line format: c:<filename>
     ufd = data
     filename1 = s.ufdmap[ufd]
 
@@ -78,12 +78,15 @@ def process_c(data):
     # cleanup generated
     if filename1 in s.generated: s.generated.remove(filename1)
 
+def process_d(data):
+    pass
+
 def process_g(data):
     global s
     # line format: u:<asid>:<process label>:<filename>:<nwritten>
     asid, process, filename, nwritten = data.split(':')
     process = ':'.join(process.split(';'))
-    filename = filename[1:-1]
+    filename = urllib.unquote(filename)
 
     if filename not in s.files:
         print rdf_open_fmt.format(
@@ -101,7 +104,7 @@ def process_o(data):
     global s
     # line format: o:<ufd>:<filename>
     ufd, filename = data.split(':')
-    s.ufdmap[ufd] = filename
+    s.ufdmap[ufd] = urllib.unquote(filename)
 
     # print triple
 
@@ -110,7 +113,7 @@ def process_u(data):
     # line format: u:<asid>:<process label>:<filename>:<nread>
     asid, process, filename, nread = data.split(':')
     process = ':'.join(process.split(';'))
-    filename = filename[1:-1]
+    filename = urllib.unquote(filename)
 
     if filename not in s.files:
         print rdf_open_fmt.format(
@@ -195,6 +198,7 @@ if __name__ == "__main__":
 
         op, data =  line.strip().split(':', 1)
         try:
+            print '# Debug line: '+line.strip()
             globals()['process_'+op](data)
         except KeyError:
             # Keep bad line as comment.

@@ -16,15 +16,19 @@ class FileInfo {
 	public:
 		FileInfo(char *name, int flags);
 		~FileInfo();
-		bool flag_set(char c) const;
 
-		// file data
-		char *name;
 		int flags;
-
-		// accounting information
 		unsigned int written;
 		unsigned int read;
+
+		bool flag_set(char c) const;
+		char *get_name() const;
+		char *get_name_escaped() const;
+
+	private:
+		char *name;
+		char *name_escaped;
+		void update_escaped();
 };
 typedef std::unordered_map<int, FileInfo *> FDMap;
 typedef std::vector<FileInfo *> FileInfoVector;
@@ -36,12 +40,10 @@ typedef std::vector<FileInfo *> FileInfoVector;
 class SyscallInfo {
 	public:
 		SyscallInfo(ProcInfo *pi, CPUState *env);		// XXX: Do we need ProcInfo???
-		//~SyscallInfo();
 		std::ostream& dump(std::ostream& o) const;		/*< Dumps a string representation of the syscall on stream `o`. */
 		std::string str() const;						/*< Returns a string representation of the syscall, without showing a potential return value. */
 		std::string str(bool include_rval) const;		/*< Returns a string representation of the syscall, which may also include the return value. */
-		const char *c_str() const;
-		const char *c_str(bool include_rval) const;
+
 		const char *get_name() const;
 		union syscall_arg get_arg(int n, size_t sz) const;	/*< Returns the value of a syscall argument, depending on its type. Strings/buffers have to be freed. */
 		int get_ret() const;
