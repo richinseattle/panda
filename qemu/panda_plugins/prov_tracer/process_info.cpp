@@ -210,7 +210,7 @@ void ProcInfo::syscall_end(CPUState *env) {
 					flags = O_WRONLY;
 				break;
 				default:
-					filename = g_strdup_printf("<FD%d_%d>", fd, (int)this->p.pid);
+					filename = g_strdup_printf("FD%d_%d", fd, (int)this->p.pid);
 					flags = (nr == SYSCALL_WRITE) ? O_RDWR : O_RDONLY;
 				break;
 			}
