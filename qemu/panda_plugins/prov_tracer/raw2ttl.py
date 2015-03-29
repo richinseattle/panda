@@ -23,20 +23,20 @@ rdf_exec_fmt = dedent('''
 ''').strip()
 
 rdf_open_fmt = dedent('''
-    <file://{url_file}> a prov:Entity .
-    <file://{url_file}> rdfs:label "{label}" .
+    <file:{url_file}> a prov:Entity .
+    <file:{url_file}> rdfs:label "{label}" .
 ''').strip()
 
 rdf_used_fmt = dedent('''
-    <exe://{url_program}> prov:used <{url_file}> .
+    <exe://{url_program}> prov:used <file:{url_file}> .
 ''').strip()
 
 rdf_generated_fmt = dedent('''
-    <{url_file}> prov:wasGeneratedBy <exe://{url_program}> .
+    <file:{url_file}> prov:wasGeneratedBy <exe://{url_program}> .
 ''').strip()
 
 rdf_derived_fmt = dedent('''
-    <file://{url_file1}> prov:wasDerivedFrom <file://{url_file2}> .
+    <file:{url_file1}> prov:wasDerivedFrom <file:{url_file2}> .
 ''').strip()
 
 #### exceptions #####################################################
@@ -60,78 +60,61 @@ class TagFormatError(Error):
 
 
 #### handlers for entry lines #######################################
-def process_c(data):
-    global s
-    # line format: c:<filename>
-    ufd = data
-    filename1 = s.ufdmap[ufd]
-
-    # print triples
-    if ufd in s.derived:
-        for filename2 in s.derived[ufd]:
-            print rdf_derived_fmt.format(
-                url_file1 = 'file://'+urllib.pathname2url(filename1),
-                url_file2 = 'file://'+urllib.pathname2url(filename2),
-            )
-        del s.derived[ufd]
-
-    # cleanup generated
-    if filename1 in s.generated: s.generated.remove(filename1)
-
 def process_d(data):
     pass
 
 def process_g(data):
     global s
     # line format: u:<asid>:<process label>:<filename>:<nwritten>
-    asid, process, filename, nwritten = data.split(':')
+    asid, process, filename, nwritten = data
     process = ':'.join(process.split(';'))
-    filename = urllib.unquote(filename)
 
     if filename not in s.files:
         print rdf_open_fmt.format(
-            url_file=urllib.pathname2url(filename),
-            label=filename
+            # prov toolbox has problems with url-quoted characters
+            # url_file = urllib.pathname2url(filename),
+            url_file = filename,
+            label = filename
         )
         s.files.add(filename)
 
     print rdf_generated_fmt.format(
         url_program = process,
-        url_file = 'file://'+urllib.pathname2url(filename),
+        # prov toolbox has problems with url-quoted characters
+        # url_file = urllib.pathname2url(filename),
+        url_file = filename,
     )
 
-def process_o(data):
-    global s
-    # line format: o:<ufd>:<filename>
-    ufd, filename = data.split(':')
-    s.ufdmap[ufd] = urllib.unquote(filename)
-
-    # print triple
+def process_q(data):
+    pass
 
 def process_u(data):
     global s
     # line format: u:<asid>:<process label>:<filename>:<nread>
-    asid, process, filename, nread = data.split(':')
+    asid, process, filename, nread = data
     process = ':'.join(process.split(';'))
-    filename = urllib.unquote(filename)
 
     if filename not in s.files:
         print rdf_open_fmt.format(
-            url_file=urllib.pathname2url(filename),
-            label=filename
+            # prov toolbox has problems with url-quoted characters
+            # url_file = urllib.pathname2url(filename),
+            url_file = filename,
+            label = filename
         )
         s.files.add(filename)
 
     #print triple
     print rdf_used_fmt.format(
         url_program = process,
-        url_file = 'file://'+urllib.pathname2url(filename),
+        # prov toolbox has problems with url-quoted characters
+        # url_file = urllib.pathname2url(filename),
+        url_file = filename,
     )
 
 def process_w(data):
     global s
     # line format: w:<range type>:<output ufd>:<output offset>:<origin ufd>:<origin offset>:<length>
-    rtype, ufd, offset, ufd_origin, offset_origin, length = data.split(':', 5)
+    rtype, ufd, offset, ufd_origin, offset_origin, length = data
 
     if ufd not in s.ufdmap:
         raise UnknownUFDError(ufd)
@@ -147,8 +130,12 @@ def process_w(data):
     # emit generated triple if needed
     if filename in s.generated:
         print rdf_generated_fmt.format(
-            url_program = 'file://'+urllib.pathname2url(s.exe),
-            url_file = 'file://'+urllib.pathname2url(filename),
+            # prov toolbox has problems with url-quoted characters
+            # url_program = urllib.pathname2url(s.exe),
+            url_program = s.exe,
+            # prov toolbox has problems with url-quoted characters
+            # url_file = urllib.pathname2url(filename),
+            url_file = filename,
         )
         s.generated.remove(filename)
 
@@ -158,21 +145,15 @@ def process_w(data):
     else:
         s.derived[ufd] = set([filename_origin])
 
-
-def process_q(data):
-    pass
-
 def process_x(data):
     global s
     # line format: x:<asid>:<process label>
-    asid, process = data.split(':')
+    asid, process = data
     process = ':'.join(process.split(';'))
 
     print rdf_exec_fmt.format(
         url_program = process,
     )
-
-
 
 class Raw2TTLState:
     exe = None
@@ -196,11 +177,45 @@ if __name__ == "__main__":
             print line.strip()
             continue
 
-        op, data =  line.strip().split(':', 1)
+        # split and unquote data
+        op, data = line.strip().split(':', 1)
+        data = map(urllib.unquote, data.split(':'))
+
         try:
+            # call proper handler 
             print '# Debug line: '+line.strip()
             globals()['process_'+op](data)
         except KeyError:
             # Keep bad line as comment.
             print '# Bad line: '+line.strip()
             raise
+
+
+        
+#### crap ###########################################################
+#def process_c(data):
+    #global s
+    ## line format: c:<filename>
+    #ufd, = data
+    #filename1 = s.ufdmap[ufd]
+
+    ## print triples
+    #if ufd in s.derived:
+        #for filename2 in s.derived[ufd]:
+            #print rdf_derived_fmt.format(
+                #url_file1 = 'file://'+urllib.pathname2url(filename1),
+                #url_file2 = 'file://'+urllib.pathname2url(filename2),
+            #)
+        #del s.derived[ufd]
+
+    # cleanup generated
+    #if filename1 in s.generated: s.generated.remove(filename1)
+
+#def process_o(data):
+    #global s
+    # line format: o:<ufd>:<filename>
+    #ufd, filename = data
+
+    # print triple
+
+
