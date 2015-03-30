@@ -1,5 +1,10 @@
 #ifndef PROCESSINFO_H
 #define PROCESSINFO_H
+/*
+ * See Google's C++ style guide for style suggestions.
+ * http://google-styleguide.googlecode.com/svn/trunk/cppguide.html#Variable_Names
+ */
+
 extern "C" {
 #include "../osi/osi_types.h"		/**< Introspection data types. */
 #include "syscalls/syscallents.h"
@@ -17,18 +22,27 @@ class FileInfo {
 		FileInfo(char *name, int flags);
 		~FileInfo();
 
-		int flags;
-		unsigned int written;
-		unsigned int read;
-
-		bool flag_set(char c) const;
-		char *get_name() const;
-		char *get_name_escaped() const;
+		char *name() const;
+		char *name_escaped() const;
+		int flags() const;
+		bool test_flags(char c) const;
+		uint64_t written() const;
+		uint64_t read() const;
+		uint64_t inc_written(uint64_t n);
+		uint64_t inc_read(uint64_t n);
+		uint64_t first_read_ts() const;
+		uint64_t last_write_ts() const;
 
 	private:
-		char *name;
-		char *name_escaped;
-		void update_escaped();
+		char *name_;
+		char *name_escaped_;
+		int flags_;
+		uint64_t written_;
+		uint64_t read_;
+		uint64_t first_read_ts_;
+		uint64_t last_write_ts_;
+
+		void update_name_escaped();
 };
 typedef std::unordered_map<int, FileInfo *> FDMap;
 typedef std::vector<FileInfo *> FileInfoVector;

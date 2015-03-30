@@ -42,10 +42,10 @@ ProcInfo::~ProcInfo(void) {
 	for (auto f_it=this->fhist.begin(); f_it!=this->fhist.end(); ++f_it) {
 		// Dump process-file provenance relations.
 		auto f = *f_it;
-		bool fw = (f->flag_set('w') && (f->written > 0));
-		bool fr = (f->flag_set('r') && (f->read > 0));
+		bool fw = (f->test_flags('w') && (f->written() > 0));
+		bool fr = (f->test_flags('r') && (f->read() > 0));
 
-		if (f->flag_set('t')) {
+		if (f->test_flags('t')) {
 			PROVLOG_P2F(this, f, 'g');
 		}
 		else if (fw) {
@@ -61,15 +61,42 @@ ProcInfo::~ProcInfo(void) {
 		for (auto g_it=this->fhist.begin(); g_it!=this->fhist.end(); ++g_it) {
 			// Dump file-file provenance relations.
 			auto g = *g_it;
-			bool gw = (f->flag_set('w') && (f->written > 0));
-			bool gr = (f->flag_set('r') && (f->read > 0));
+			bool gw = (g->test_flags('w') && (g->written() > 0));
+			bool gr = (g->test_flags('r') && (g->read() > 0));
 
 			// Comment the following line to produce a derivation edge
 			// to itself for each file that was both read from and written to.
 			if (g_it == f_it) { continue; }
 
-			if (fr && gw) { PROVLOG_F2F(this, f, g, 'd'); }
-			if (gr && fw) { PROVLOG_F2F(this, g, f, 'd'); }
+			// Add derivation edges.
+			// Emit a derivation edge only when the last write on a file is
+			// after the first read from the other file.
+			if (fr && gw) {
+				int dropped = 1;
+				if (g->last_write_ts() > f->first_read_ts()) {
+					PROVLOG_F2F(this, g, f, 'd');
+					dropped = 0;
+				}
+
+				LOG_INFO("%s(w@%" PRId64 ") was%sDerivedFrom %s(r@%" PRId64 ")",
+					g->name(), g->last_write_ts(),
+					dropped ? "Not" : "",
+					f->name(), f->first_read_ts()
+				);
+			}
+			if (gr && fw ) {
+				int dropped = 1;
+				if (f->last_write_ts() > g->first_read_ts()) {
+					PROVLOG_F2F(this, f, g, 'd');
+					dropped = 0;
+				}
+
+				LOG_INFO("%s(w@%" PRId64 ") was%sDerivedFrom %s(r@%" PRId64 ")",
+					f->name(), f->last_write_ts(),
+					dropped ? "Not" : "",
+					g->name(), g->first_read_ts()
+				);
+			}
 		}
 	}
 
@@ -82,7 +109,7 @@ ProcInfo::~ProcInfo(void) {
 
 std::string ProcInfo::label() const {
     std::ostringstream ss;
-    ss << this->p.name << ';' << this->p.pid << (this->is_fresh ? "*" : "");
+    ss << this->p.name << '~' << this->p.pid << (this->is_fresh ? "*" : "");
     return ss.str();
 }
 
@@ -144,7 +171,7 @@ void ProcInfo::syscall_end(CPUState *env) {
 		// This may (?) happen if fd closed due to an error.
 		auto fdpair = this->fmap.find(rval);
 		if (unlikely(fdpair != this->fmap.end())) {
-			LOG_WARN("%s: fd%d is already mapped to %s.", this->label().c_str(), rval, (*fdpair).second->get_name());
+			LOG_WARN("%s: fd%d is already mapped to %s.", this->label().c_str(), rval, (*fdpair).second->name());
 			this->fhist.push_back( (*fdpair).second );
 			this->fmap.erase(fdpair);
 		}
@@ -220,9 +247,9 @@ void ProcInfo::syscall_end(CPUState *env) {
 
 		// Increase the proper counter for the file.
 		if (nr == SYSCALL_READ)
-			(*fdpair).second->read += rval;
+			(*fdpair).second->inc_read(rval);
 		else if (nr == SYSCALL_WRITE)
-			(*fdpair).second->written += rval;
+			(*fdpair).second->inc_written(rval);
 		else
 			EXIT_ON_ERROR(1 == 1, "Don't drink and code.");
 	}

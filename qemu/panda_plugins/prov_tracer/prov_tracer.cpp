@@ -1,6 +1,5 @@
 #include "platform.h"
 #include "prov_tracer.h"
-
 extern "C" {
 #include "config.h"
 #include "qemu-common.h"

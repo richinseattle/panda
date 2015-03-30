@@ -61,7 +61,15 @@ class TagFormatError(Error):
 
 #### handlers for entry lines #######################################
 def process_d(data):
-    pass
+    filename1, filename2 = data
+    print rdf_derived_fmt.format(
+        # prov toolbox has problems with url-quoted characters
+        # url_file1 = urllib.pathname2url(filename1),
+        url_file1 = filename1,
+        # prov toolbox has problems with url-quoted characters
+        # url_file2 = urllib.pathname2url(filename2),
+        url_file2 = filename2,
+    )
 
 def process_g(data):
     global s
@@ -110,40 +118,6 @@ def process_u(data):
         # url_file = urllib.pathname2url(filename),
         url_file = filename,
     )
-
-def process_w(data):
-    global s
-    # line format: w:<range type>:<output ufd>:<output offset>:<origin ufd>:<origin offset>:<length>
-    rtype, ufd, offset, ufd_origin, offset_origin, length = data
-
-    if ufd not in s.ufdmap:
-        raise UnknownUFDError(ufd)
-    if ufd_origin not in s.ufdmap:
-        raise UnknownUFDError(ufd_origin)
-
-    filename = s.ufdmap[ufd]
-    filename_origin = s.ufdmap[ufd_origin]
-    offset = int(offset)
-    offset_origin = int(offset_origin)
-    length = int(length)
-
-    # emit generated triple if needed
-    if filename in s.generated:
-        print rdf_generated_fmt.format(
-            # prov toolbox has problems with url-quoted characters
-            # url_program = urllib.pathname2url(s.exe),
-            url_program = s.exe,
-            # prov toolbox has problems with url-quoted characters
-            # url_file = urllib.pathname2url(filename),
-            url_file = filename,
-        )
-        s.generated.remove(filename)
-
-    # simple file provenance
-    if ufd in s.derived:
-        s.derived[ufd].add(filename_origin)
-    else:
-        s.derived[ufd] = set([filename_origin])
 
 def process_x(data):
     global s
@@ -217,5 +191,39 @@ if __name__ == "__main__":
     #ufd, filename = data
 
     # print triple
+
+#def process_w(data):
+    #global s
+    ## line format: w:<range type>:<output ufd>:<output offset>:<origin ufd>:<origin offset>:<length>
+    #rtype, ufd, offset, ufd_origin, offset_origin, length = data
+
+    #if ufd not in s.ufdmap:
+        #raise UnknownUFDError(ufd)
+    #if ufd_origin not in s.ufdmap:
+        #raise UnknownUFDError(ufd_origin)
+
+    #filename = s.ufdmap[ufd]
+    #filename_origin = s.ufdmap[ufd_origin]
+    #offset = int(offset)
+    #offset_origin = int(offset_origin)
+    #length = int(length)
+
+    # emit generated triple if needed
+    #if filename in s.generated:
+        #print rdf_generated_fmt.format(
+            ## prov toolbox has problems with url-quoted characters
+            ## url_program = urllib.pathname2url(s.exe),
+            #url_program = s.exe,
+            ## prov toolbox has problems with url-quoted characters
+            ## url_file = urllib.pathname2url(filename),
+            #url_file = filename,
+        #)
+        #s.generated.remove(filename)
+
+    ## simple file provenance
+    #if ufd in s.derived:
+        #s.derived[ufd].add(filename_origin)
+    #else:
+        #s.derived[ufd] = set([filename_origin])
 
 
