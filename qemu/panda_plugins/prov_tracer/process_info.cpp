@@ -71,18 +71,12 @@ ProcInfo::~ProcInfo(void) {
 			// Add derivation edges.
 			// Emit a derivation edge only when the last write on a file is
 			// after the first read from the other file.
-			if (fw && gr) {
-				int dropped = 1;
-				if (f->last_write_ts() > g->first_read_ts()) {
-					PROVLOG_F2F(this, f, g, 'd');
-					dropped = 0;
-
-					LOG_INFO("%s(w@%" PRId64 ") was%sDerivedFrom %s(r@%" PRId64 ")",
-						f->name(), f->last_write_ts(),
-						dropped ? "Not" : "",
-						g->name(), g->first_read_ts()
-					);
-				}
+			if (fw && gr && (f->last_write_ts() > g->first_read_ts())) {
+				PROVLOG_F2F(this, f, g, 'd');
+				LOG_INFO("%s(w@%" PRId64 ") wasDerivedFrom %s(r@%" PRId64 ")",
+					f->name(), f->last_write_ts(),
+					g->name(), g->first_read_ts()
+				);
 			}
 		}
 	}
