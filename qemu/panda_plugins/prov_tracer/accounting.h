@@ -33,6 +33,8 @@ class FileInfo {
 		uint64_t first_read_ts() const;
 		uint64_t last_write_ts() const;
 
+		std::string repr() const;
+
 	private:
 		char *name_;
 		char *name_escaped_;

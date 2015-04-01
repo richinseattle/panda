@@ -36,6 +36,9 @@ extern off_t stdcount[STDFD_MAX];
 /**** output macros and inlines ***********************************/
 
 /* inline functions for raw provenance logging */
+static inline void PROVLOG_COMMENT(const std::string s) {
+	prov_out << "# " << s << std::endl;
+}
 static inline void PROVLOG_EXEC(const ProcInfo *pi) {
 	prov_out << "x:" << pi->p.asid << ":" << pi->label() << std::endl;
 }

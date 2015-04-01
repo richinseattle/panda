@@ -36,6 +36,17 @@ FileInfo::~FileInfo() {
 }
 
 /*!
+ * @brief Debug representation of the file.
+ */
+std::string FileInfo::repr() const {
+    std::stringstream ss;
+    ss	<< this->name_
+	<< "(r" << this->read_ << ":w" << this->written_
+	<< ")";
+    return ss.str();
+}
+
+/*!
  * @brief Returns the name of the file.
  */
 char *FileInfo::name() const {

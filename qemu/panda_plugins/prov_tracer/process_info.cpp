@@ -61,41 +61,28 @@ ProcInfo::~ProcInfo(void) {
 		for (auto g_it=this->fhist.begin(); g_it!=this->fhist.end(); ++g_it) {
 			// Dump file-file provenance relations.
 			auto g = *g_it;
-			bool gw = (g->test_flags('w') && (g->written() > 0));
+			//bool gw = (g->test_flags('w') && (g->written() > 0));
 			bool gr = (g->test_flags('r') && (g->read() > 0));
 
 			// Comment the following line to produce a derivation edge
 			// to itself for each file that was both read from and written to.
-			if (g_it == f_it) { continue; }
+			if (*g_it == *f_it) { continue; }
 
 			// Add derivation edges.
 			// Emit a derivation edge only when the last write on a file is
 			// after the first read from the other file.
-			if (fr && gw) {
-				int dropped = 1;
-				if (g->last_write_ts() > f->first_read_ts()) {
-					PROVLOG_F2F(this, g, f, 'd');
-					dropped = 0;
-				}
-
-				LOG_INFO("%s(w@%" PRId64 ") was%sDerivedFrom %s(r@%" PRId64 ")",
-					g->name(), g->last_write_ts(),
-					dropped ? "Not" : "",
-					f->name(), f->first_read_ts()
-				);
-			}
-			if (gr && fw ) {
+			if (fw && gr) {
 				int dropped = 1;
 				if (f->last_write_ts() > g->first_read_ts()) {
 					PROVLOG_F2F(this, f, g, 'd');
 					dropped = 0;
-				}
 
-				LOG_INFO("%s(w@%" PRId64 ") was%sDerivedFrom %s(r@%" PRId64 ")",
-					f->name(), f->last_write_ts(),
-					dropped ? "Not" : "",
-					g->name(), g->first_read_ts()
-				);
+					LOG_INFO("%s(w@%" PRId64 ") was%sDerivedFrom %s(r@%" PRId64 ")",
+						f->name(), f->last_write_ts(),
+						dropped ? "Not" : "",
+						g->name(), g->first_read_ts()
+					);
+				}
 			}
 		}
 	}
