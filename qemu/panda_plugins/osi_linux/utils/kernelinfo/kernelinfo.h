@@ -85,6 +85,7 @@ struct fs_info {
     int d_parent_offset;
     int fdt_offset;
     int fdtab_offset;
+    int fd_offset;
 };
 
 /*!

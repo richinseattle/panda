@@ -117,6 +117,7 @@ int read_kernelinfo(gchar const *file, gchar const *group, struct kernelinfo *ki
     READ_INFO_INT(fs.d_parent_offset, err, err_fs);
     READ_INFO_INT(fs.fdt_offset, err, err_fs);
     READ_INFO_INT(fs.fdtab_offset, err, err_fs);
+    READ_INFO_INT(fs.fd_offset, err, err_fs);
 
     /* read kernel full name */
     READ_INFO_STRING(name, err, err_misc);

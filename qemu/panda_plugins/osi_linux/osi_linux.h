@@ -263,8 +263,13 @@ IMPLEMENT_OFFSET_GET2L(get_vma_dentry, vma_struct, PTR, ki.vma.vm_file_offset, P
 /**
  * @brief da shit
  */
-IMPLEMENT_OFFSET_GET(get_lul, task_struct, PTR, ki.task.files_offset, 0)
-IMPLEMENT_OFFSET_GET2L(get_lol, task_struct, PTR, ki.task.files_offset, PTR, ki.fs.fdt_offset, 0)
+IMPLEMENT_OFFSET_GET(get_files, task_struct, PTR, ki.task.files_offset, 0)
+
+/**
+ * @brief da shit
+ */
+IMPLEMENT_OFFSET_GET2L(get_files_fds, files_struct, PTR, ki.fs.fdt_offset, PTR, ki.fs.fd_offset, 0)
+
 
 /* ******************************************************************
  Slightly more complex inlines that can't be implemented as simple
@@ -288,9 +293,40 @@ IMPLEMENT_OFFSET_GET2L(get_lol, task_struct, PTR, ki.task.files_offset, PTR, ki.
 #define _SIZEOF_QSTR (2*sizeof(target_uint) + sizeof(PTR))
 
 /**
+ * @brief Retrieves the dentry of the nth 
+ */
+static inline PTR get_fd_dentry(CPUState *env, PTR fd_file_array, int n) {
+  PTR fd_file_ptr, fd_file, dentry;
+
+  /*
+   * fd_file_array is a flat array with struct file pointers.
+   * Calculate the address of the nth pointer and read it.
+   */
+  fd_file_ptr = fd_file_array+n*sizeof(PTR);
+  if (-1 == panda_virtual_memory_rw(env, fd_file_ptr, (uint8_t *)&fd_file, sizeof(PTR), 0)) {
+    panda_memory_errors++;
+    LOG_INFO("FOOREAD ERROR");
+    return (PTR)NULL;
+  }
+
+  if (fd_file == (PTR)NULL) {
+    LOG_INFO("FOO fd%d not used.", n);
+    return (PTR)NULL;
+  }
+
+  if (-1 == panda_virtual_memory_rw(env, fd_file+ki.fs.f_dentry_offset, (uint8_t *)&dentry, sizeof(PTR), 0)) {
+    panda_memory_errors++;
+    LOG_INFO("BARREAD ERROR");
+    return (PTR)NULL;
+  }
+
+  return dentry;
+}
+
+/**
  * @brief Retrieves the name of the file associated with a dentry struct.
  *
- * @note The old DECAF code used to check dentry.d_iname. This unecessary complicated
+ * @note The old DECAF code used to check dentry.d_iname. This unecessarily complicated
  * the implementation. dentry.d_iname is merely a buffer. When used, dentry.d_name->name
  * will merely point to this buffer instead of a dynamically allocated buffer.
  */

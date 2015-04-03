@@ -29,6 +29,7 @@ int init_module(void)
     struct file filestruct;
     struct thread_info threadinfostruct;
     struct files_struct filesstruct; /* mind the extra 's' :-P */
+    struct fdtable fdtablestruct;
 
     struct task_struct *ts_p;
     struct cred *cs_p;
@@ -36,6 +37,7 @@ int init_module(void)
     struct vm_area_struct *vma_p;
     struct dentry *ds_p;
     struct file *fs_p;
+    struct fdtable *fdt_p;
     struct thread_info *ti_p;
     struct files_struct *fss_p;
 
@@ -47,6 +49,7 @@ int init_module(void)
     fs_p = &filestruct;
     ti_p = &threadinfostruct;
     fss_p = &filesstruct;
+    fdt_p = &fdtablestruct;
 
     printk(KERN_INFO "--KERNELINFO-BEGIN--\n");
     printk(KERN_INFO "name = %s %s\n", utsname()->version, utsname()->machine);
@@ -96,6 +99,7 @@ int init_module(void)
     /* used in reading FDs */
     PRINT_OFFSET(fss_p,  fdt,           "fs");
     PRINT_OFFSET(fss_p,  fdtab,         "fs");
+    PRINT_OFFSET(fdt_p,  fd,            "fs");
 
     PRINT_OFFSET(fs_p,  f_path,         "fs");
     PRINT_OFFSET(ds_p,  d_name,         "fs");

@@ -145,7 +145,10 @@ void on_get_current_process(CPUState *env, OsiProc **out_p) {
  * @brief PPP callback to retrieve process list from the running OS.
  */
 void on_get_processes(CPUState *env, OsiProcs **out_ps) {
-    PTR a, b, c;
+    PTR files, fds, dentry;
+    int fd;
+    char *s;
+
     PTR ts_first, ts_current;
     OsiProcs *ps;
     OsiProc *p;
@@ -177,12 +180,22 @@ void on_get_processes(CPUState *env, OsiProcs **out_ps) {
         memset(p, 0, sizeof(OsiProc));
         fill_osiproc(env, p, ts_current);
 
-        a = get_lul(env, ts_current)+ki.fs.fdtab_offset;
-        b = get_lul(env, ts_current);
-        c = get_lol(env, ts_current);
-        LOG_INFO("lul " TARGET_FMT_lx "/" TARGET_FMT_lx "/" TARGET_FMT_lx "/%d",
-            a, b, c, a==c
-        );
+        files = get_files(env, ts_current);
+        fds = get_files_fds(env, files);
+        for (fd=0; fd<10; fd++) {
+            dentry = get_fd_dentry(env, fds, fd);
+            if (dentry > 0) {
+            s = read_dentry_name(env, dentry, NULL, 1);
+            LOG_INFO("%s fd%d -> %s", p->name, fd, s);
+            }
+        }
+
+        /*
+        vma_dentry = get_vma_dentry(env, vma_addr);
+        m->name = g_strrstr (m->file, "/");
+        if (m->name != NULL) m->name = g_strdup(m->name + 1);
+        }
+        */
 
         ts_current = get_task_struct_next(env, ts_current);
     } while(ts_current != (PTR)NULL && ts_current != ts_first);

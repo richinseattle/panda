@@ -44,6 +44,16 @@ Sketch of some of the structures used for Linux OS introspection. Only relevant 
 } /\* task\_struct \*/
 </pre></big>
 
+<!-- fdt seems to point to fdtab in general. for a few tasks it doesn't.
+see
+
+print the tasks where fdt does not point to fdtab:
+grep lul f  | grep '0$' | awk '{print $3}' | sort | uniq -c
+
+see if for any of these tasks, fdt points to fdtab at some point:
+for t in $(grep lul f  | grep '0$' | awk '{print $3}' | sort | uniq); do grep  "lul.*$t.*1$" f; done
+
+-->
 
 [task_struct]: https://github.com/torvalds/linux/blob/v3.2/include/linux/sched.h#L1220
 [mm_struct]: https://github.com/torvalds/linux/blob/v3.2/include/linux/mm_types.h#L289
