@@ -15,6 +15,8 @@
 #include <linux/sched.h>
 #include <linux/mm.h>
 #include <linux/fs.h>
+#include <linux/file.h>
+#include <linux/fdtable.h>
 #include <linux/dcache.h>
 
 #define PRINT_OFFSET(structp, memb, cfgname) printk(KERN_INFO "%s." #memb "_offset = %d", cfgname, (int)((void *)&(structp->memb) - (void *)structp))
@@ -26,6 +28,7 @@ int init_module(void)
     struct dentry dentrystruct;
     struct file filestruct;
     struct thread_info threadinfostruct;
+    struct files_struct filesstruct; /* mind the extra 's' :-P */
 
     struct task_struct *ts_p;
     struct cred *cs_p;
@@ -34,6 +37,7 @@ int init_module(void)
     struct dentry *ds_p;
     struct file *fs_p;
     struct thread_info *ti_p;
+    struct files_struct *fss_p;
 
     ts_p = &init_task;
     cs_p = &credstruct;
@@ -42,6 +46,7 @@ int init_module(void)
     ds_p = &dentrystruct;
     fs_p = &filestruct;
     ti_p = &threadinfostruct;
+    fss_p = &filesstruct;
 
     printk(KERN_INFO "--KERNELINFO-BEGIN--\n");
     printk(KERN_INFO "name = %s %s\n", utsname()->version, utsname()->machine);
@@ -64,6 +69,7 @@ int init_module(void)
     PRINT_OFFSET(ts_p,  cred,           "task");
     PRINT_OFFSET(ts_p,  comm,           "task");
     printk(KERN_INFO "task.comm_size = %zu\n", sizeof(ts_p->comm));
+    PRINT_OFFSET(ts_p,  files,          "task");
 
     PRINT_OFFSET(cs_p,  uid,            "cred");
     PRINT_OFFSET(cs_p,  gid,            "cred");
@@ -86,6 +92,10 @@ int init_module(void)
     /* used in reading OsiModules */
     PRINT_OFFSET(vma_p, vm_file,        "vma");
     PRINT_OFFSET(fs_p,  f_dentry,       "fs");
+
+    /* used in reading FDs */
+    PRINT_OFFSET(fss_p,  fdt,           "fs");
+    PRINT_OFFSET(fss_p,  fdtab,         "fs");
 
     PRINT_OFFSET(fs_p,  f_path,         "fs");
     PRINT_OFFSET(ds_p,  d_name,         "fs");

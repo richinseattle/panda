@@ -31,6 +31,16 @@ Sketch of some of the structures used for Linux OS introspection. Only relevant 
             }}; /\* file \*/
         }}; /\* vm\_area\_struct \*/
     }}; /\* mm\_struct \*/
+    struct files\_struct \*files {{ /\* open files information: [fdtable.h][files_struct], ppXXX \*/
+        struct fdtable *fdt {{   /\* ??? this may point to fdtab -- VERIFY : [fdtable.h][fdtable] \*/
+            struct file **fd {{  /\* current fd array: [XXX][XXX] \*/                     
+            }};
+        }};
+        struct fdtable fdtab {{   /\* not pointer!: [fdtable.h][fdtable] \*/
+            struct file **fd {{  /\* current fd array: [XXX][XXX] \*/                     
+            }};
+        }};
+    }}; /\* files\_struct \*/
 } /\* task\_struct \*/
 </pre></big>
 
@@ -43,6 +53,8 @@ Sketch of some of the structures used for Linux OS introspection. Only relevant 
 [vfsmount]: https://github.com/torvalds/linux/blob/v3.2/include/linux/mount.h#L55
 [dentry]: https://github.com/torvalds/linux/blob/v3.2/include/linux/dcache.h#L116
 [qstr]: https://github.com/torvalds/linux/blob/v3.2/include/linux/dcache.h#L35
+[files_struct]: https://github.com/torvalds/linux/blob/v3.2/include/linux/fdtable.h#XXX
+[fdtable]: https://github.com/torvalds/linux/blob/v3.2/include/linux/fdtable.h#XXX
 
 
 # The kernel task list

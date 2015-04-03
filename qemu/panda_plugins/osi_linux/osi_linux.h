@@ -20,7 +20,7 @@
 
 // For byte array reversal.
 #define PLUGIN_NAME "osi_linux"
-#define DEFAULT_KERNELINFO_GROUP "debian-3.2.63-i686"
+#define DEFAULT_KERNELINFO_GROUP "debian-3.2.65-i686"
 
 /**
  * @brief Pointer type of the guest VM.
@@ -258,6 +258,13 @@ IMPLEMENT_OFFSET_GET2L(get_vma_dentry, vma_struct, PTR, ki.vma.vm_file_offset, P
 
 // TODO: temp names
 //IMPLEMENT_OFFSET_GET2L(get_dentry1, vma_struct, PTR, ki.vma.vm_file_offset, PTR, ki.fs.f_path_offset+0000, 0)
+
+
+/**
+ * @brief da shit
+ */
+IMPLEMENT_OFFSET_GET(get_lul, task_struct, PTR, ki.task.files_offset, 0)
+IMPLEMENT_OFFSET_GET2L(get_lol, task_struct, PTR, ki.task.files_offset, PTR, ki.fs.fdt_offset, 0)
 
 /* ******************************************************************
  Slightly more complex inlines that can't be implemented as simple

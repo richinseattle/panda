@@ -145,6 +145,7 @@ void on_get_current_process(CPUState *env, OsiProc **out_p) {
  * @brief PPP callback to retrieve process list from the running OS.
  */
 void on_get_processes(CPUState *env, OsiProcs **out_ps) {
+    PTR a, b, c;
     PTR ts_first, ts_current;
     OsiProcs *ps;
     OsiProc *p;
@@ -175,6 +176,13 @@ void on_get_processes(CPUState *env, OsiProcs **out_ps) {
         // Garbage in p->name will cause fill_osiproc() to segfault.
         memset(p, 0, sizeof(OsiProc));
         fill_osiproc(env, p, ts_current);
+
+        a = get_lul(env, ts_current)+ki.fs.fdtab_offset;
+        b = get_lul(env, ts_current);
+        c = get_lol(env, ts_current);
+        LOG_INFO("lul " TARGET_FMT_lx "/" TARGET_FMT_lx "/" TARGET_FMT_lx "/%d",
+            a, b, c, a==c
+        );
 
         ts_current = get_task_struct_next(env, ts_current);
     } while(ts_current != (PTR)NULL && ts_current != ts_first);
