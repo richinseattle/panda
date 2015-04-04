@@ -242,23 +242,16 @@ IMPLEMENT_OFFSET_GET(get_vma_vm_file, vma_struct, PTR, ki.vma.vm_file_offset, 0)
 
 /**
  * @brief Retrieves the dentry associated with a vma_struct.
- *
- * @note Old DECAF code used different code, depending on whether ki.fs.f_dentry_offset was available.
- * It is assumed here that the offset is always available (can't think why it shouldn't be).
- * From Linux 2.6.20 onwards, f_dentry is a pseudo-member of the file struct.
- *
- * @see https://github.com/torvalds/linux/commit/0f7fc9e4d03987fe29f6dd4aa67e4c56eb7ecb05
  */
-IMPLEMENT_OFFSET_GET2L(get_vma_dentry, vma_struct, PTR, ki.vma.vm_file_offset, PTR, ki.fs.f_dentry_offset, 0)
+IMPLEMENT_OFFSET_GET2L(get_vma_dentry, vma_struct, PTR, ki.vma.vm_file_offset, PTR, ki.fs.f_path_dentry_offset, 0)
 
 /**
  * @brief Retrieves the vfsmount dentry associated with a vma_struct.
+ *
+ * XXX: Reading the vfsmount dentry is required to get the full pathname of files not located in the root fs.
+ *      This hasn't been implemented yet...
  */
-//IMPLEMENT_OFFSET_GET2L(get_vma_vfsmount_dentry, vma_struct, PTR, ki.vma.vm_file_offset, PTR, ki.fs.f_dentry_offset, 0)
-
-// TODO: temp names
-//IMPLEMENT_OFFSET_GET2L(get_dentry1, vma_struct, PTR, ki.vma.vm_file_offset, PTR, ki.fs.f_path_offset+0000, 0)
-
+IMPLEMENT_OFFSET_GET2L(get_vma_vfsmount_dentry, vma_struct, PTR, ki.vma.vm_file_offset, PTR, ki.fs.f_path_dentry_offset, 0)
 
 /**
  * @brief da shit
@@ -314,7 +307,7 @@ static inline PTR get_fd_dentry(CPUState *env, PTR fd_file_array, int n) {
     return (PTR)NULL;
   }
 
-  if (-1 == panda_virtual_memory_rw(env, fd_file+ki.fs.f_dentry_offset, (uint8_t *)&dentry, sizeof(PTR), 0)) {
+  if (-1 == panda_virtual_memory_rw(env, fd_file+ki.fs.f_path_dentry_offset, (uint8_t *)&dentry, sizeof(PTR), 0)) {
     panda_memory_errors++;
     LOG_INFO("BARREAD ERROR");
     return (PTR)NULL;

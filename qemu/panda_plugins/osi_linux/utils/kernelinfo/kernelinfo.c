@@ -19,7 +19,44 @@
 #include <linux/fdtable.h>
 #include <linux/dcache.h>
 
-#define PRINT_OFFSET(structp, memb, cfgname) printk(KERN_INFO "%s." #memb "_offset = %d", cfgname, (int)((void *)&(structp->memb) - (void *)structp))
+/*
+ * This function is used because we need to print offsets of
+ * members of nested structs.
+ *
+ * Notably, struct file looks like this:
+ * struct file {
+ *  ...
+ *  struct dentry {
+ *      struct *vfsmount;
+ *      struct *dentry;
+ *  }
+ *  ...
+ * };
+ *
+ * So, the offsets of vfsmount, dentry pointers can be directly
+ * calculated related to struct file.
+ * By transforming '.' to '_', we don't have to replicate the
+ * nesting in the structures used by the introspection programs
+ * (located in kernelinfo.h).
+ *
+ * Caveat: Because a static buffer is returned, the function
+ * can only be used once in each invocation of printk.
+ */
+#define MAX_MEMBER_NAME 31
+static char *cp_memb(const char *s) {
+    static char memb[MAX_MEMBER_NAME+1];
+    int i;
+    for (i = 0; i<MAX_MEMBER_NAME && s[i]!='\0'; i++) {
+        memb[i] = s[i] == '.' ? '_' : s[i];
+    }
+    memb[i] = 0;
+    return memb;
+}
+
+/*
+ * The macro printing the config lines in the kernel log.
+ */
+#define PRINT_OFFSET(structp, memb, cfgname) printk(KERN_INFO "%s.%s_offset = %d", cfgname, cp_memb(#memb), (int)((void *)&(structp->memb) - (void *)structp))
 
 int init_module(void)
 {
@@ -94,14 +131,14 @@ int init_module(void)
 
     /* used in reading OsiModules */
     PRINT_OFFSET(vma_p, vm_file,        "vma");
-    PRINT_OFFSET(fs_p,  f_dentry,       "fs");
+    PRINT_OFFSET(fs_p,  f_path.dentry,  "fs");
+    PRINT_OFFSET(fs_p,  f_path.mnt,     "fs");
 
     /* used in reading FDs */
     PRINT_OFFSET(fss_p,  fdt,           "fs");
     PRINT_OFFSET(fss_p,  fdtab,         "fs");
     PRINT_OFFSET(fdt_p,  fd,            "fs");
 
-    PRINT_OFFSET(fs_p,  f_path,         "fs");
     PRINT_OFFSET(ds_p,  d_name,         "fs");
     PRINT_OFFSET(ds_p,  d_iname,        "fs");
     PRINT_OFFSET(ds_p,  d_parent,       "fs");

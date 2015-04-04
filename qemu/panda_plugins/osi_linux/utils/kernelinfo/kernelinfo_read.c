@@ -110,8 +110,8 @@ int read_kernelinfo(gchar const *file, gchar const *group, struct kernelinfo *ki
     READ_INFO_INT(vma.vm_flags_offset, err, err_vma);
 
     /* read fs information */
-    READ_INFO_INT(fs.f_dentry_offset, err, err_fs);
-    READ_INFO_INT(fs.f_path_offset, err, err_fs);
+    READ_INFO_INT(fs.f_path_dentry_offset, err, err_fs);
+    READ_INFO_INT(fs.f_path_vfsmount_offset, err, err_fs);
     READ_INFO_INT(fs.d_name_offset, err, err_fs);
     READ_INFO_INT(fs.d_iname_offset, err, err_fs);
     READ_INFO_INT(fs.d_parent_offset, err, err_fs);

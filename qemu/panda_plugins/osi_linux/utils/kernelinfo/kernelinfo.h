@@ -78,8 +78,8 @@ struct vma_info {
  * @brief Filesystem information and offsets.
  */
 struct fs_info {
-    int f_dentry_offset;
-    int f_path_offset;
+    int f_path_dentry_offset;
+    int f_path_vfsmount_offset;
     int d_name_offset;
     int d_iname_offset;
     int d_parent_offset;
