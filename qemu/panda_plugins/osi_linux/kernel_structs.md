@@ -14,7 +14,8 @@ Sketch of some of the structures used for Linux OS introspection. Only relevant 
             unsigned long vm\_flags;     /\* RWXS flags \*/
             struct file \*vm\_file {{     /\* file we map to (can be NULL): [fs.h][file], pp471 \*/
                 struct path f\_path {{   /\* not pointer!: [path.h][path] \*/
-                    struct vfsmount \*mnt {{    /\* mounted fs containing file: [mount.h][vfsmount] \*/
+                    struct vfsmount \*mnt {{    /\* mounted fs containing file: [mount.h][vfsmount], pp486 \*/
+                        struct vfsmount \*mnt_parent; 
                         struct dentry \*mnt_mountpoint; /\* dentry of mountpoint: [dcache.h][dentry], pp475 \*/
                         struct dentry \*mnt_root; /\* root of the mounted tree: [dcache.h][dentry], pp475 \*/
                     }};
@@ -26,8 +27,6 @@ Sketch of some of the structures used for Linux OS introspection. Only relevant 
                         unsigned char d\_iname[DNAME\_INLINE\_LEN]; /\* should not be used directly! when the name is small enough, d_name->name will point here. \*/  
                     }}; /\* dentry \*/
                 }}; /\* path /*
-                #define f\_dentry f\_path.dentry  /\* pseudo-member \*/
-                #define f\_vfsmnt f\_path.mnt     /\* pseudo-member \*/
             }}; /\* file \*/
         }}; /\* vm\_area\_struct \*/
     }}; /\* mm\_struct \*/

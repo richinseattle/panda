@@ -55,6 +55,53 @@ int panda_memory_errors;
 ****************************************************************** */
 
 /**
+ * @brief Resolves a file struct and returns its full pathname.
+ */
+static char *get_file_name(CPUState *env, PTR file_struct) {
+    PTR file_dentry, file_mnt, current_mnt;
+    PTR current_mnt_parent, current_mnt_dentry, current_mnt_root_dentry;
+
+    // Read addresses for dentry, vfsmnt structs.
+    file_dentry = get_file_dentry(env, file_struct);
+    file_mnt = get_file_mnt(env, file_struct);
+
+    if (unlikely(file_dentry == (PTR)NULL || file_mnt == (PTR)NULL)) {
+        LOG_INFO("failure resolving file struct " TARGET_FMT_PTR "/" TARGET_FMT_PTR, file_dentry, file_mnt);
+        return NULL;
+    }
+
+    LOG_INFO("STARTED resolving " TARGET_FMT_PTR, file_struct);
+    current_mnt = file_mnt;
+    int i = 0;
+    do {
+        char *s;
+
+        current_mnt_parent = get_mnt_parent(env, current_mnt);
+        current_mnt_dentry = get_mnt_dentry(env, current_mnt);
+        current_mnt_root_dentry = get_mnt_root_dentry(env, current_mnt);
+
+        s = read_dentry_name(env, current_mnt_dentry, NULL, 1);
+        LOG_INFO("TEST %16s " TARGET_FMT_PTR " | " TARGET_FMT_PTR " " TARGET_FMT_PTR " " TARGET_FMT_PTR, 
+            s,
+            current_mnt,
+            current_mnt_parent,
+            current_mnt_dentry,
+            current_mnt_root_dentry
+        );
+        g_free(s);
+
+        if (current_mnt == current_mnt_parent) {
+            LOG_INFO("SUCCESS resolving " TARGET_FMT_PTR, file_struct);
+            break;
+        }
+        current_mnt = current_mnt_parent;
+    } while(i++ < 10);
+
+    return NULL;
+}
+
+
+/**
  * @brief Fills an OsiProc struct.
  */
 static void fill_osiproc(CPUState *env, OsiProc *p, PTR task_addr) {
@@ -68,7 +115,7 @@ static void fill_osiproc(CPUState *env, OsiProc *p, PTR task_addr) {
     p->asid = get_pgd(env, task_addr);
 
 #if (OSI_LINUX_TEST)
-    LOG_INFO(TARGET_FMT_lx ":%d:%d:" TARGET_FMT_lx ":%s", task_addr, (int)p->ppid, (int)p->pid, p->asid, p->name);
+    LOG_INFO(TARGET_FMT_PTR ":" TARGET_FMT_PID ":" TARGET_FMT_PID ":" TARGET_FMT_PTR ":%s", task_addr, p->ppid, p->pid, p->asid, p->name);
 #endif
 }
 
@@ -115,9 +162,7 @@ static void fill_osimodule(CPUState *env, OsiModule *m, PTR vma_addr) {
     }
 
 #if (OSI_LINUX_TEST)
-    LOG_INFO(TARGET_FMT_lx ":" TARGET_FMT_lx ":" TARGET_FMT_ld "p:%s:%s",
-        m->offset, m->base, NPAGES(m->size), m->name, m->file
-    );
+    LOG_INFO(TARGET_FMT_PTR ":" TARGET_FMT_PTR ":" TARGET_FMT_PID "p:%s:%s", m->offset, m->base, NPAGES(m->size), m->name, m->file);
 #endif
 }
 
@@ -145,9 +190,7 @@ void on_get_current_process(CPUState *env, OsiProc **out_p) {
  * @brief PPP callback to retrieve process list from the running OS.
  */
 void on_get_processes(CPUState *env, OsiProcs **out_ps) {
-    PTR files, fds, dentry;
-    int fd;
-    char *s;
+    PTR files, fds;
 
     PTR ts_first, ts_current;
     OsiProcs *ps;
@@ -180,22 +223,34 @@ void on_get_processes(CPUState *env, OsiProcs **out_ps) {
         memset(p, 0, sizeof(OsiProc));
         fill_osiproc(env, p, ts_current);
 
+        /*********************************************************/
+        // TESTING FD RESOLUTION
+        /*********************************************************/
         files = get_files(env, ts_current);
         fds = get_files_fds(env, files);
-        for (fd=0; fd<10; fd++) {
-            dentry = get_fd_dentry(env, fds, fd);
-            if (dentry > 0) {
-            s = read_dentry_name(env, dentry, NULL, 1);
-            LOG_INFO("%s fd%d -> %s", p->name, fd, s);
-            }
-        }
 
-        /*
-        vma_dentry = get_vma_dentry(env, vma_addr);
-        m->name = g_strrstr (m->file, "/");
-        if (m->name != NULL) m->name = g_strdup(m->name + 1);
+        for (int fdn=0; fdn<10; fdn++) {
+            PTR fd_file_ptr, fd_file;
+            char *s;
+
+            /*
+             * fds is a flat array with struct file pointers.
+             * Calculate the address of the nth pointer and read it.
+             */
+            fd_file_ptr = fds + fdn*sizeof(PTR);
+            if (-1 == panda_virtual_memory_rw(env, fd_file_ptr, (uint8_t *)&fd_file, sizeof(PTR), 0)) {
+                LOG_INFO("FOOREAD ERROR %s fd%d", p->name, fdn);
+                continue;
+            }
+            if (fd_file == (PTR)NULL) {
+                LOG_INFO("%s fd%d not used.", p->name, fdn);
+                continue;
+            }
+
+            s = get_file_name(env, fd_file);
+            LOG_INFO("%s fd%d -> %s", p->name, fdn, s);
         }
-        */
+        /*********************************************************/
 
         ts_current = get_task_struct_next(env, ts_current);
     } while(ts_current != (PTR)NULL && ts_current != ts_first);

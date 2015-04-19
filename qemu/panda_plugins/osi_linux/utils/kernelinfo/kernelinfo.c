@@ -18,12 +18,15 @@
 #include <linux/file.h>
 #include <linux/fdtable.h>
 #include <linux/dcache.h>
+#include <linux/mount.h>
 
 /*
- * This function is used because we need to print offsets of
- * members of nested structs.
+ * This function is used because to print offsets of members
+ * of nested structs. It basically transforms '.' to '_', so
+ * that we don't have to replicate all the nesting in the
+ * structs used by the introspection program.
  *
- * Notably, struct file looks like this:
+ * E.g. for:
  * struct file {
  *  ...
  *  struct dentry {
@@ -32,12 +35,6 @@
  *  }
  *  ...
  * };
- *
- * So, the offsets of vfsmount, dentry pointers can be directly
- * calculated related to struct file.
- * By transforming '.' to '_', we don't have to replicate the
- * nesting in the structures used by the introspection programs
- * (located in kernelinfo.h).
  *
  * Caveat: Because a static buffer is returned, the function
  * can only be used once in each invocation of printk.
@@ -67,6 +64,7 @@ int init_module(void)
     struct thread_info threadinfostruct;
     struct files_struct filesstruct; /* mind the extra 's' :-P */
     struct fdtable fdtablestruct;
+    struct vfsmount vfsmountstruct;
 
     struct task_struct *ts_p;
     struct cred *cs_p;
@@ -77,6 +75,7 @@ int init_module(void)
     struct fdtable *fdt_p;
     struct thread_info *ti_p;
     struct files_struct *fss_p;
+    struct vfsmount *vfsmnt_p;
 
     ts_p = &init_task;
     cs_p = &credstruct;
@@ -87,6 +86,7 @@ int init_module(void)
     ti_p = &threadinfostruct;
     fss_p = &filesstruct;
     fdt_p = &fdtablestruct;
+    vfsmnt_p = &vfsmountstruct;
 
     printk(KERN_INFO "--KERNELINFO-BEGIN--\n");
     printk(KERN_INFO "name = %s %s\n", utsname()->version, utsname()->machine);
@@ -131,8 +131,12 @@ int init_module(void)
 
     /* used in reading OsiModules */
     PRINT_OFFSET(vma_p, vm_file,        "vma");
-    PRINT_OFFSET(fs_p,  f_path.dentry,  "fs");
-    PRINT_OFFSET(fs_p,  f_path.mnt,     "fs");
+
+    PRINT_OFFSET(fs_p,      f_path.dentry,  "fs");
+    PRINT_OFFSET(fs_p,      f_path.mnt,     "fs");
+    PRINT_OFFSET(vfsmnt_p,  mnt_parent,     "fs");
+    PRINT_OFFSET(vfsmnt_p,  mnt_mountpoint, "fs");
+    PRINT_OFFSET(vfsmnt_p,  mnt_root,       "fs");
 
     /* used in reading FDs */
     PRINT_OFFSET(fss_p,  fdt,           "fs");
