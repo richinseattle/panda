@@ -80,6 +80,27 @@ static char *get_file_name(CPUState *env, PTR file_struct) {
     return name;
 }
 
+/**
+ * @brief Resolves a file struct and returns its full pathname.
+ */
+static char *get_fd_name(CPUState *env, PTR task_struct, int fd) {
+    PTR files = get_files(env, task_struct);
+    PTR fds = get_files_fds(env, files);
+    PTR fd_file_ptr, fd_file;
+
+    // fds is a flat array with struct file pointers.
+    // Calculate the address of the nth pointer and read it.
+    fd_file_ptr = fds + fd*sizeof(PTR);
+    if (-1 == panda_virtual_memory_rw(env, fd_file_ptr, (uint8_t *)&fd_file, sizeof(PTR), 0)) {
+        return NULL;
+    }
+    if (fd_file == (PTR)NULL) {
+        return NULL;
+    }
+
+    // Resolve file struct to name.
+    return get_file_name(env, fd_file);
+}
 
 /**
  * @brief Fills an OsiProc struct.
@@ -170,8 +191,6 @@ void on_get_current_process(CPUState *env, OsiProc **out_p) {
  * @brief PPP callback to retrieve process list from the running OS.
  */
 void on_get_processes(CPUState *env, OsiProcs **out_ps) {
-    PTR files, fds;
-
     PTR ts_first, ts_current;
     OsiProcs *ps;
     OsiProc *p;
@@ -206,29 +225,10 @@ void on_get_processes(CPUState *env, OsiProcs **out_ps) {
         /*********************************************************/
         // TESTING FD RESOLUTION
         /*********************************************************/
-        files = get_files(env, ts_current);
-        fds = get_files_fds(env, files);
-
         for (int fdn=0; fdn<10; fdn++) {
-            PTR fd_file_ptr, fd_file;
-            char *s;
-
-            /*
-             * fds is a flat array with struct file pointers.
-             * Calculate the address of the nth pointer and read it.
-             */
-            fd_file_ptr = fds + fdn*sizeof(PTR);
-            if (-1 == panda_virtual_memory_rw(env, fd_file_ptr, (uint8_t *)&fd_file, sizeof(PTR), 0)) {
-                LOG_INFO("FOOREAD ERROR %s fd%d", p->name, fdn);
-                continue;
-            }
-            if (fd_file == (PTR)NULL) {
-                //LOG_INFO("%s fd%d not used.", p->name, fdn);
-                continue;
-            }
-
-            s = get_file_name(env, fd_file);
+            char *s = get_fd_name(env, ts_current, fdn);
             LOG_INFO("%s fd%d -> %s", p->name, fdn, s);
+            g_free(s);
         }
         /*********************************************************/
 
