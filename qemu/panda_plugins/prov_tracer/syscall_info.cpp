@@ -10,10 +10,10 @@ extern "C" {
 #include <iomanip>
 
 #include "accounting.h"
-#include "prov_log.h"				/**< Macros for logging raw provenance. */
+#include "prov_log.h"					/**< Macros for logging raw provenance. */
 
 extern "C" {
-extern struct syscall_entry *syscalls;	  /**< Syscalls info table. */
+extern struct syscall_entry *syscalls;	/**< Syscalls info table. */
 }
 
 
@@ -23,8 +23,8 @@ extern struct syscall_entry *syscalls;	  /**< Syscalls info table. */
 // *******************************************************************
 SyscallInfo::SyscallInfo(ProcInfo *pi, CPUState *env) {
 #if defined(TARGET_I386)
-	// XXX: OSDEP: On Windows and Linux, the system call id is in EAX.
-	//	  OSDEP: On Linux, system call arguments are passed in registers.
+	// XXX:	OSDEP: On Windows and Linux, the system call id is in EAX.
+	//		OSDEP: On Linux, system call arguments are passed in registers.
 	this->nr = env->regs[R_EAX];
 	static int argidx[6] = {R_EBX, R_ECX, R_EDX, R_ESI, R_EDI, R_EBP};
 	this->env = env;
@@ -35,17 +35,17 @@ SyscallInfo::SyscallInfo(ProcInfo *pi, CPUState *env) {
 		auto arg = env->regs[argidx[i]];
 		switch (syscalls[this->nr].args[i]) {
 			case SYSCALL_ARG_INT:
-		this->args[i].intval = arg;
-				break;
+				this->args[i].intval = arg;
+			break;
 
 			case SYSCALL_ARG_PTR:
 			case SYSCALL_ARG_STR:
-		this->args[i].pval = (TARGET_PTR)arg;
-				break;
+				this->args[i].pval = (TARGET_PTR)arg;
+			break;
 
 			default:
 				EXIT_ON_ERROR(1, "Unexpected syscall argument type %d.", syscalls[this->nr].args[i]);
-				break;
+			break;
 		}
 	}
 #else
@@ -68,29 +68,29 @@ union syscall_arg SyscallInfo::get_arg(int n, size_t sz) const {
 	union syscall_arg r;
 
 	switch (syscalls[this->nr].args[n]) {
-	case SYSCALL_ARG_INT:
-		r.intval = (target_int)this->args[n].intval;
-	break;
+		case SYSCALL_ARG_INT:
+			r.intval = (target_int)this->args[n].intval;
+		break;
 
-	case SYSCALL_ARG_STR:
-		r.sval = g_strdup(panda_virtual_memory_smart_read(this->env, this->args[n].pval, sz).c_str());
-	break;
+		case SYSCALL_ARG_STR:
+			r.sval = g_strdup(panda_virtual_memory_smart_read(this->env, this->args[n].pval, sz).c_str());
+		break;
 
-	case SYSCALL_ARG_PTR:
-		if (sz == 0) {
-		// only interested in the value of the pointer
-		r.pval = (TARGET_PTR)this->args[n].pval;
-		}
-		else{
-		// interested in the actual data
-		r.buf = (uint8_t *)g_malloc(sz);
-		panda_virtual_memory_rw(this->env, this->args[n].pval, r.buf, sz, 0);
-		}
-	break;
+		case SYSCALL_ARG_PTR:
+			if (sz == 0) {
+			// only interested in the value of the pointer
+			r.pval = (TARGET_PTR)this->args[n].pval;
+			}
+			else{
+			// interested in the actual data
+			r.buf = (uint8_t *)g_malloc(sz);
+			panda_virtual_memory_rw(this->env, this->args[n].pval, r.buf, sz, 0);
+			}
+		break;
 
-	default:
-		EXIT_ON_ERROR(1 == 1, "Huh?");
-	break;
+		default:
+			EXIT_ON_ERROR(1 == 1, "Huh?");
+		break;
 	}
 	return r;
 }
@@ -108,14 +108,14 @@ std::ostream& SyscallInfo::dump(std::ostream& o) const {
 
 			case SYSCALL_ARG_PTR:
 				o   << "0x" << std::hex << std::setfill('0')
-			<< std::setw(2*sizeof(TARGET_PTR))
-			<< this->args[i].pval;
+					<< std::setw(2*sizeof(TARGET_PTR))
+					<< this->args[i].pval;
 			break;
 
 			case SYSCALL_ARG_STR:
-		if (this->args[i].pval) {
-			o << panda_virtual_memory_smart_read(this->env, this->args[i].pval, 32);
-		}
+				if (this->args[i].pval) {
+					o << panda_virtual_memory_smart_read(this->env, this->args[i].pval, 32);
+				}
 				else { o << "NULL"; }
 			break;
 
