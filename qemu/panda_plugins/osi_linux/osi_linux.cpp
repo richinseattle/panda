@@ -80,7 +80,7 @@ static char *get_file_name(CPUState *env, PTR file_struct) {
         current_mnt_dentry = get_mnt_dentry(env, current_mnt);
         current_mnt_root_dentry = get_mnt_root_dentry(env, current_mnt);
 
-        s = read_dentry_name(env, current_mnt_dentry, NULL, 1);
+        s = read_dentry_name(env, current_mnt_dentry);
         LOG_INFO("TEST %16s " TARGET_FMT_PTR " | " TARGET_FMT_PTR " " TARGET_FMT_PTR " " TARGET_FMT_PTR, 
             s,
             current_mnt,
@@ -91,7 +91,9 @@ static char *get_file_name(CPUState *env, PTR file_struct) {
         g_free(s);
 
         if (current_mnt == current_mnt_parent) {
-            LOG_INFO("SUCCESS resolving " TARGET_FMT_PTR, file_struct);
+            s = read_dentry_name(env, file_dentry);
+            LOG_INFO("SUCCESS resolving " TARGET_FMT_PTR " %s", file_struct, s);
+            g_free(s);
             break;
         }
         current_mnt = current_mnt_parent;
@@ -139,7 +141,7 @@ static void fill_osimodule(CPUState *env, OsiModule *m, PTR vma_addr) {
 
     if (vma_vm_file != (PTR)NULL) {     // Memory area is mapped from a file.
         vma_dentry = get_vma_dentry(env, vma_addr);
-        m->file = read_dentry_name(env, vma_dentry, NULL, 1);
+        m->file = read_dentry_name(env, vma_dentry);
         m->name = g_strrstr (m->file, "/");
         if (m->name != NULL) m->name = g_strdup(m->name + 1);
     }

@@ -360,10 +360,14 @@ static inline PTR get_fd_dentry(CPUState *env, PTR fd_file_array, int n) {
  * the implementation. dentry.d_iname is merely a buffer. When used, dentry.d_name->name
  * will merely point to this buffer instead of a dynamically allocated buffer.
  */
-static inline char *read_dentry_name(CPUState *env, PTR dentry, char *name, int recurse) {
+static inline char *read_dentry_name(CPUState *env, PTR dentry) {
+  char *name = NULL;
   PTR dentry_current;
   uint8_t d_name[_SIZEOF_QSTR];
   int err;
+
+  // if 0, the function will return only the basename of the dentry
+  int recurse = 1;
 
   // current path component
   char *pcomp = NULL;
@@ -421,7 +425,6 @@ static inline char *read_dentry_name(CPUState *env, PTR dentry, char *name, int 
   }
 
   // join components and return
-  g_free(name);
   pcomps[pcomps_idx] = NULL;      // NULL terminate vector
   if (dentry == dentry_current) { // Eliminate root directory.
     pcomps[0][0] = '\0';
@@ -434,8 +437,6 @@ static inline char *read_dentry_name(CPUState *env, PTR dentry, char *name, int 
 error:
   LOG_INFO("Error reading d_entry.");
   panda_memory_errors++;
-
-  g_free(name);
   pcomps[pcomps_idx] = NULL;
   g_free(pcomp);
   g_strfreev(pcomps);
