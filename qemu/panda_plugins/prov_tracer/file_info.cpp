@@ -39,18 +39,18 @@ FileInfo::~FileInfo() {
  * @brief Debug representation of the file.
  */
 std::string FileInfo::repr() const {
-    std::stringstream ss;
-    ss	<< this->name_
+	std::stringstream ss;
+	ss	<< this->name_
 	<< "(r" << this->read_ << ":w" << this->written_
 	<< ")";
-    return ss.str();
+	return ss.str();
 }
 
 /*!
  * @brief Returns the name of the file.
  */
 char *FileInfo::name() const {
-    return this->name_;
+	return this->name_;
 }
 
 /*!
@@ -58,7 +58,7 @@ char *FileInfo::name() const {
  * in the raw provenance file.
  */
 char *FileInfo::name_escaped() const {
-    return this->name_escaped_;
+	return this->name_escaped_;
 }
 
 /*!
@@ -86,9 +86,9 @@ uint64_t FileInfo::last_write_ts() const { return this->last_write_ts_; }
  * Also adjusts the last written pseudo-timestamp.
  */
 uint64_t FileInfo::inc_written(uint64_t n) {
-    this->last_write_ts_ = rr_get_guest_instr_count();
-    this->written_ += n;
-    return this->written_;
+	this->last_write_ts_ = rr_get_guest_instr_count();
+	this->written_ += n;
+	return this->written_;
 }
 
 /*!
@@ -96,11 +96,11 @@ uint64_t FileInfo::inc_written(uint64_t n) {
  * Also initializes the first read pseudo-timestamp.
  */
 uint64_t FileInfo::inc_read(uint64_t n) {
-    if (unlikely(this->read_ == 0)) {
-	this->first_read_ts_ = rr_get_guest_instr_count();
-    }
-    this->read_ += n;
-    return this->read_;
+	if (unlikely(this->read_ == 0)) {
+		this->first_read_ts_ = rr_get_guest_instr_count();
+	}
+	this->read_ += n;
+	return this->read_;
 }
 
 /*!
@@ -111,23 +111,23 @@ uint64_t FileInfo::inc_read(uint64_t n) {
  * characters, the rest of control characters.
  */
 void FileInfo::update_name_escaped() {
-    std::ostringstream escaped;
-    escaped.fill('0');
-    escaped << std::hex;
+	std::ostringstream escaped;
+	escaped.fill('0');
+	escaped << std::hex;
 
-    for (char *cp = this->name_; *cp!='\0'; cp++) {
+	for (char *cp = this->name_; *cp!='\0'; cp++) {
 	// this would produce the equivalent to url encoding
-        // if (!(isalnum(*cp) || *cp == '-' || *cp == '_' || *cp == '.' || *cp == '~')) {
+	// if (!(isalnum(*cp) || *cp == '-' || *cp == '_' || *cp == '.' || *cp == '~')) {
 
-	//          non printable   raw separator            line control
 	if (unlikely(iscntrl(*cp) || *cp == ':' || (isspace(*cp) && !isblank(*cp)))) {
-	    escaped << '%' << std::setw(2) << int((unsigned char) *cp);
-	    continue;
+		//	   non printable  raw separator			line control
+		escaped << '%' << std::setw(2) << int((unsigned char) *cp);
+		continue;
 	}
 	escaped << *cp;
-    }
-    g_free(this->name_escaped_);
-    this->name_escaped_ = g_strdup(escaped.str().c_str());
+	}
+	g_free(this->name_escaped_);
+	this->name_escaped_ = g_strdup(escaped.str().c_str());
 }
 
 /*!
@@ -140,13 +140,14 @@ int FileInfo::flags() const { return this->flags_; }
  * Supported flags are 'r', 'w', 't'.
  */
 bool FileInfo::test_flags(char c) const {
-    if (c == 'w')
-	return ( (this->flags_ & O_WRONLY) || (this->flags_ & O_RDWR) );
-    else if (c == 'r')
-	return ( !(this->flags_ & O_WRONLY) );
-    else if (c == 't')
-	return ( ((this->flags_ & O_WRONLY) || (this->flags_ & O_RDWR)) && (this->flags_ & O_TRUNC) );
-    else
-	return false;
+	if (c == 'w')
+		return ( (this->flags_ & O_WRONLY) || (this->flags_ & O_RDWR) );
+	else if (c == 'r')
+		return ( !(this->flags_ & O_WRONLY) );
+	else if (c == 't')
+		return ( ((this->flags_ & O_WRONLY) || (this->flags_ & O_RDWR)) && (this->flags_ & O_TRUNC) );
+	else
+		return false;
 }
 
+/* vim:set tabstop=4 softtabstop=4 noexpandtab */

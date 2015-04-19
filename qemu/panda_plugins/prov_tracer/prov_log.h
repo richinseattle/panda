@@ -21,10 +21,10 @@ typedef uint32_t ufd_t;
 
 /* Array that maps fds to ufds. */
 typedef struct {
-    std::array<ufd_t, MAX_OPEN_FILES> map;
-    ufd_t next = 1;
-    decltype(map[0]) get(int fd){ if (map[fd]==0) map[fd] = next++; return map[fd]; }
-    void del(int fd) { map[fd] = 0; }
+	std::array<ufd_t, MAX_OPEN_FILES> map;
+	ufd_t next = 1;
+	decltype(map[0]) get(int fd){ if (map[fd]==0) map[fd] = next++; return map[fd]; }
+	void del(int fd) { map[fd] = 0; }
 } ufdmap_t;
 extern ufdmap_t ufdmap;
 
@@ -79,3 +79,5 @@ static inline void PROVLOG_F2F(const ProcInfo *pi, const FileInfo *fi1, const Fi
 	}
 }
 #endif
+
+/* vim:set tabstop=4 softtabstop=4 noexpandtab */

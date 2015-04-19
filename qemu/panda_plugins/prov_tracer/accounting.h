@@ -101,3 +101,5 @@ typedef std::unordered_map<target_ulong, ProcInfo *> ProcInfoMap;
 
 extern ProcInfoMap pimap;
 #endif
+
+/* vim:set tabstop=4 softtabstop=4 noexpandtab */

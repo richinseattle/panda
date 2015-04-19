@@ -13,7 +13,7 @@ extern "C" {
 #include "prov_log.h"						/**< Macros for logging raw provenance. */
 
 extern "C" {
-extern struct syscall_entry *syscalls;      /**< Syscalls info table. */
+extern struct syscall_entry *syscalls;	  /**< Syscalls info table. */
 }
 
 
@@ -89,37 +89,37 @@ ProcInfo::~ProcInfo(void) {
 }
 
 std::string ProcInfo::label() const {
-    std::ostringstream ss;
-    ss << this->p.name << '~' << this->p.pid << (this->is_fresh ? "*" : "");
-    return ss.str();
+	std::ostringstream ss;
+	ss << this->p.name << '~' << this->p.pid << (this->is_fresh ? "*" : "");
+	return ss.str();
 }
 
 void ProcInfo::syscall_start(CPUState *env) {
 #if defined(TARGET_I386)
-    if (unlikely(this->syscall != NULL)) {
+	if (unlikely(this->syscall != NULL)) {
 		LOG_WARN("%s: \"%s\" was pending when \"%s\" (" TARGET_FMT_ld ") started!",
 			this->label().c_str(), this->syscall->get_name(),
 			SyscallInfo(this, env).get_name(), env->regs[R_EAX]
 		);
 		delete this->syscall;
-    }
-    this->syscall = new SyscallInfo(this, env);
+	}
+	this->syscall = new SyscallInfo(this, env);
 #endif
 }
 
 void ProcInfo::syscall_end(CPUState *env) {
 #if defined(TARGET_I386)
-    if (unlikely(this->syscall == NULL)) {
+	if (unlikely(this->syscall == NULL)) {
 		// This may occur at the beginning of replay.
 		LOG_INFO("%s: Unknown syscall completed.", this->label().c_str());
 		return;
-    }
+	}
 
-    LOG_INFO("%s: syscall completed: %s", this->label().c_str(), this->syscall->str(true).c_str());
+	LOG_INFO("%s: syscall completed: %s", this->label().c_str(), this->syscall->str(true).c_str());
 
-    int rval = this->syscall->get_ret();
-    union syscall_arg arg;
-    int nr = syscalls[this->syscall->nr].nr;
+	int rval = this->syscall->get_ret();
+	union syscall_arg arg;
+	int nr = syscalls[this->syscall->nr].nr;
 
 	// Emit provenance for program here.
 	// This has two benefits:
@@ -130,23 +130,23 @@ void ProcInfo::syscall_end(CPUState *env) {
 		this->logged = true;
 	}
 
-    // Handle cases based on the prov_tracer specific nr.
-    // Using this custom nr is meant to simplify handling.
+	// Handle cases based on the prov_tracer specific nr.
+	// Using this custom nr is meant to simplify handling.
 	// For open/close, only FileInfo entries are created.
 	// Actual provenance is dumped when process exits.
-    switch(nr) {
+	switch(nr) {
 	case SYSCALL_OPEN:
 	{
-	    // Check return status.
-	    if (unlikely(rval < 0)) break;
+		// Check return status.
+		if (unlikely(rval < 0)) break;
 
 		// Retrieve arguments.
-	    arg = this->syscall->get_arg(0, 128);
-	    PERMIT_UNUSED char *filename = arg.sval;
-	    arg = this->syscall->get_arg(1, 0);
-	    PERMIT_UNUSED int flags = arg.intval;
-	    //arg = this->syscall->get_arg(2, 0);
-	    //PERMIT_UNUSED int mode = arg.intval;
+		arg = this->syscall->get_arg(0, 128);
+		PERMIT_UNUSED char *filename = arg.sval;
+		arg = this->syscall->get_arg(1, 0);
+		PERMIT_UNUSED int flags = arg.intval;
+		//arg = this->syscall->get_arg(2, 0);
+		//PERMIT_UNUSED int mode = arg.intval;
 
 		// Check for existing mapping for fd.
 		// This may (?) happen if fd closed due to an error.
@@ -164,12 +164,12 @@ void ProcInfo::syscall_end(CPUState *env) {
 
 	case SYSCALL_CLOSE:
 	{
-	    // Check return status.
-	    if (unlikely(rval < 0)) break;
+		// Check return status.
+		if (unlikely(rval < 0)) break;
 
 		// Retrieve arguments.
-	    arg = this->syscall->get_arg(0, 0);
-	    PERMIT_UNUSED int fd = arg.intval;
+		arg = this->syscall->get_arg(0, 0);
+		PERMIT_UNUSED int fd = arg.intval;
 
 		// Move file to history.
 		auto fdpair = this->fmap.find(fd);
@@ -185,17 +185,17 @@ void ProcInfo::syscall_end(CPUState *env) {
 	case SYSCALL_READ:
 	case SYSCALL_WRITE:
 	{
-	    // Check return status.
-	    if (unlikely(rval <= 0)) break;
+		// Check return status.
+		if (unlikely(rval <= 0)) break;
 
 		// Retrieve arguments.
-	    arg = this->syscall->get_arg(0, 0);
-	    PERMIT_UNUSED int fd = arg.intval;
-	    //arg = this->syscall->get_arg(1, 128);
-	    //PERMIT_UNUSED uint8_t *buf = arg.buf;
-	    //g_free(buf);
-	    arg = this->syscall->get_arg(2, 0);
-	    PERMIT_UNUSED int count = arg.intval;
+		arg = this->syscall->get_arg(0, 0);
+		PERMIT_UNUSED int fd = arg.intval;
+		//arg = this->syscall->get_arg(1, 128);
+		//PERMIT_UNUSED uint8_t *buf = arg.buf;
+		//g_free(buf);
+		arg = this->syscall->get_arg(2, 0);
+		PERMIT_UNUSED int count = arg.intval;
 
 		// Retrieve FileInfo.
 		auto fdpair = this->fmap.find(fd);
@@ -237,18 +237,19 @@ void ProcInfo::syscall_end(CPUState *env) {
 	break;
 
 	case SYSCALL_OTHER:
-	    // ignore
+		// ignore
 	break;
 
 	default:
-	    LOG_WARN("%s:No handling for the completed syscall.", this->label().c_str());
+		LOG_WARN("%s:No handling for the completed syscall.", this->label().c_str());
 	break;
-    }
+	}
 
-    delete this->syscall;
-    this->syscall = NULL;
+	delete this->syscall;
+	this->syscall = NULL;
 
-    return;
+	return;
 #endif
 }
 
+/* vim:set tabstop=4 softtabstop=4 noexpandtab */
