@@ -264,23 +264,40 @@ IMPLEMENT_OFFSET_GET2L(get_vma_dentry, vma_struct, PTR, ki.vma.vm_file_offset, P
 IMPLEMENT_OFFSET_GET2L(get_vma_vfsmount_dentry, vma_struct, PTR, ki.vma.vm_file_offset, PTR, ki.fs.f_path_dentry_offset, 0)
 
 /**
- * @brief da shit
+ * @brief Retrieves the address of the files struct associated with a task_struct.
  */
 IMPLEMENT_OFFSET_GET(get_files, task_struct, PTR, ki.task.files_offset, 0)
 
 /**
- * @brief da shit
+ * @brief Retrieves the array of file structs from the files struct.
+ *        The n-th element of the array corresponds to the n-th open fd.
  */
 IMPLEMENT_OFFSET_GET2L(get_files_fds, files_struct, PTR, ki.fs.fdt_offset, PTR, ki.fs.fd_offset, 0)
 
+/**
+ * @brief Retrieves the dentry struct associated with a file struct.
+ */
 IMPLEMENT_OFFSET_GET(get_file_dentry, file_struct, PTR, ki.fs.f_path_dentry_offset, 0)
+
+/**
+ * @brief Retrieves the vfsmount struct associated with a file struct.
+ */
 IMPLEMENT_OFFSET_GET(get_file_mnt, file_struct, PTR, ki.fs.f_path_mnt_offset, 0)
 
+/**
+ * @brief Retrieves the mnt_parent vfsmount struct associated with a vfsmount struct.
+ */
 IMPLEMENT_OFFSET_GET(get_mnt_parent, vfsmount_struct, PTR, ki.fs.mnt_parent_offset, 0)
+
+/**
+ * @brief Retrieves the dentry struct associated with a vfsmount struct.
+ */
 IMPLEMENT_OFFSET_GET(get_mnt_dentry, vfsmount_struct, PTR, ki.fs.mnt_mountpoint_offset, 0)
 
-/*
- * XXX: We don't use this anywhere. Marked for removal.
+/**
+ * @brief Retrieves the mnt_root dentry struct associated with a vfsmount struct.
+ *
+ * XXX: We don't use this anywhere. Marked for removal after verifying that we don't really need it. :)
  */ 
 IMPLEMENT_OFFSET_GET(get_mnt_root_dentry, vfsmount_struct, PTR, ki.fs.mnt_root_offset, 0)
 
@@ -325,39 +342,6 @@ static inline PTR get_fd_file(CPUState *env, PTR fd_file_array, int n) {
 }
 
 /**
- * DONT NEED THIS - REMOVE
- */
-#if 0
-static inline PTR get_fd_dentry(CPUState *env, PTR fd_file_array, int n) {
-  PTR fd_file_ptr, fd_file, dentry;
-
-  /*
-   * fd_file_array is a flat array with struct file pointers.
-   * Calculate the address of the nth pointer and read it.
-   */
-  fd_file_ptr = fd_file_array+n*sizeof(PTR);
-  if (-1 == panda_virtual_memory_rw(env, fd_file_ptr, (uint8_t *)&fd_file, sizeof(PTR), 0)) {
-    panda_memory_errors++;
-    LOG_INFO("FOOREAD ERROR");
-    return (PTR)NULL;
-  }
-
-  if (fd_file == (PTR)NULL) {
-    LOG_INFO("FOO fd%d not used.", n);
-    return (PTR)NULL;
-  }
-
-  if (-1 == panda_virtual_memory_rw(env, fd_file+ki.fs.f_path_dentry_offset, (uint8_t *)&dentry, sizeof(PTR), 0)) {
-    panda_memory_errors++;
-    LOG_INFO("BARREAD ERROR");
-    return (PTR)NULL;
-  }
-
-  return dentry;
-}
-#endif
-
-/**
  * @brief Retrieves the name of the file associated with a dentry struct.
  *
  * The function traverses all the path components it meets until it
@@ -372,9 +356,6 @@ static inline char *read_dentry_name(CPUState *env, PTR dentry) {
   PTR current_dentry;
   uint8_t d_name[_SIZEOF_QSTR];
   int err;
-
-  // if 0, the function will return only the basename of the dentry
-  int recurse = 1;
 
   // current path component
   char *pcomp = NULL;
@@ -417,7 +398,7 @@ static inline char *read_dentry_name(CPUState *env, PTR dentry) {
     // read the parent dentry
     err = panda_virtual_memory_rw(env, current_dentry + ki.fs.d_parent_offset, (uint8_t *)&dentry, sizeof(PTR), 0);
     if (-1 == err) goto error;
-  } while (recurse && (dentry != current_dentry));
+  } while (dentry != current_dentry);
 
   // reverse components order
   g_free(pcomp);
@@ -471,7 +452,6 @@ static inline char *read_vfsmount_name(CPUState *env, PTR vfsmount) {
   // for reversing pcomps
   char **pcomps_start, **pcomps_end;
 
-  //LOG_INFO("STARTED resolving " TARGET_FMT_PTR, file_struct);
   pcomps = (char **)g_malloc(pcomps_capacity * sizeof(char *));
   current_vfsmount_parent = vfsmount;
   do {

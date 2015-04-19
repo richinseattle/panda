@@ -74,41 +74,8 @@ static char *get_file_name(CPUState *env, PTR file_struct) {
     s1 = read_vfsmount_name(env, file_mnt);
     s2 = read_dentry_name(env, file_dentry);
     name = g_strconcat(s1, s2, NULL);
-    //LOG_INFO("STARTED resolving " TARGET_FMT_PTR " %s%s", file_struct, s1, s2);
     g_free(s1);
     g_free(s2);
-
-    #if 0
-    PTR current_mnt, current_mnt_parent, current_mnt_dentry, current_mnt_root_dentry;
-    LOG_INFO("STARTED resolving " TARGET_FMT_PTR, file_struct);
-    current_mnt = file_mnt;
-    int i = 0;
-    do {
-        char *s;
-
-        current_mnt_parent = get_mnt_parent(env, current_mnt);
-        current_mnt_dentry = get_mnt_dentry(env, current_mnt);
-        current_mnt_root_dentry = get_mnt_root_dentry(env, current_mnt);
-
-        s = read_dentry_name(env, current_mnt_dentry);
-        LOG_INFO("TEST %16s " TARGET_FMT_PTR " | " TARGET_FMT_PTR " " TARGET_FMT_PTR " " TARGET_FMT_PTR, 
-            s,
-            current_mnt,
-            current_mnt_parent,
-            current_mnt_dentry,
-            current_mnt_root_dentry
-        );
-        g_free(s);
-
-        if (current_mnt == current_mnt_parent) {
-            s = read_dentry_name(env, file_dentry);
-            LOG_INFO("SUCCESS resolving " TARGET_FMT_PTR " %s", file_struct, s);
-            g_free(s);
-            break;
-        }
-        current_mnt = current_mnt_parent;
-    } while(i++ < 10);
-    #endif
 
     return name;
 }
