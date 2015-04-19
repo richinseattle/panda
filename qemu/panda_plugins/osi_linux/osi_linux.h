@@ -278,6 +278,10 @@ IMPLEMENT_OFFSET_GET(get_file_mnt, file_struct, PTR, ki.fs.f_path_mnt_offset, 0)
 
 IMPLEMENT_OFFSET_GET(get_mnt_parent, vfsmount_struct, PTR, ki.fs.mnt_parent_offset, 0)
 IMPLEMENT_OFFSET_GET(get_mnt_dentry, vfsmount_struct, PTR, ki.fs.mnt_mountpoint_offset, 0)
+
+/*
+ * XXX: We don't use this anywhere. Marked for removal.
+ */ 
 IMPLEMENT_OFFSET_GET(get_mnt_root_dentry, vfsmount_struct, PTR, ki.fs.mnt_root_offset, 0)
 
 
@@ -356,13 +360,16 @@ static inline PTR get_fd_dentry(CPUState *env, PTR fd_file_array, int n) {
 /**
  * @brief Retrieves the name of the file associated with a dentry struct.
  *
+ * The function traverses all the path components it meets until it
+ * reaches a mount point.
+ *
  * @note The old DECAF code used to check dentry.d_iname. This unecessarily complicated
  * the implementation. dentry.d_iname is merely a buffer. When used, dentry.d_name->name
  * will merely point to this buffer instead of a dynamically allocated buffer.
  */
 static inline char *read_dentry_name(CPUState *env, PTR dentry) {
   char *name = NULL;
-  PTR dentry_current;
+  PTR current_dentry;
   uint8_t d_name[_SIZEOF_QSTR];
   int err;
 
@@ -385,10 +392,10 @@ static inline char *read_dentry_name(CPUState *env, PTR dentry) {
   pcomp = (char *)g_malloc(pcomp_capacity * sizeof(char));
   pcomps = (char **)g_malloc(pcomps_capacity * sizeof(char *));
   do {
-    dentry_current = dentry;
+    current_dentry = dentry;
 
     // read d_name qstr
-    err = panda_virtual_memory_rw(env, dentry_current + ki.fs.d_name_offset, d_name, _SIZEOF_QSTR, 0);
+    err = panda_virtual_memory_rw(env, current_dentry + ki.fs.d_name_offset, d_name, _SIZEOF_QSTR, 0);
     if (-1 == err) goto error;
 
     // read component
@@ -408,9 +415,9 @@ static inline char *read_dentry_name(CPUState *env, PTR dentry) {
     pcomps[pcomps_idx++] = g_strdup(pcomp);
 
     // read the parent dentry
-    err = panda_virtual_memory_rw(env, dentry_current + ki.fs.d_parent_offset, (uint8_t *)&dentry, sizeof(PTR), 0);
+    err = panda_virtual_memory_rw(env, current_dentry + ki.fs.d_parent_offset, (uint8_t *)&dentry, sizeof(PTR), 0);
     if (-1 == err) goto error;
-  } while (recurse && (dentry != dentry_current));
+  } while (recurse && (dentry != current_dentry));
 
   // reverse components order
   g_free(pcomp);
@@ -426,7 +433,7 @@ static inline char *read_dentry_name(CPUState *env, PTR dentry) {
 
   // join components and return
   pcomps[pcomps_idx] = NULL;      // NULL terminate vector
-  if (dentry == dentry_current) { // Eliminate root directory.
+  if (dentry == current_dentry) { // Eliminate root directory.
     pcomps[0][0] = '\0';
   }
   name = g_strjoinv("/", pcomps);
@@ -442,6 +449,63 @@ error:
   g_strfreev(pcomps);
 
   return NULL;
+}
+
+/**
+ * @brief Retrieves the name of the file associated with a dentry struct.
+ *
+ * The function traverses all the mount points to the root mount.
+ */
+static inline char *read_vfsmount_name(CPUState *env, PTR vfsmount) {
+  char *name = NULL;
+  PTR current_vfsmount, current_vfsmount_parent, current_vfsmount_dentry;
+
+  // current path component
+  char *pcomp = NULL;
+
+  // all path components read so far
+  char **pcomps = NULL;
+  unsigned int pcomps_idx = 0;
+  unsigned int pcomps_capacity = 16;
+
+  // for reversing pcomps
+  char **pcomps_start, **pcomps_end;
+
+  //LOG_INFO("STARTED resolving " TARGET_FMT_PTR, file_struct);
+  pcomps = (char **)g_malloc(pcomps_capacity * sizeof(char *));
+  current_vfsmount_parent = vfsmount;
+  do {
+    current_vfsmount = current_vfsmount_parent;
+    current_vfsmount_parent = get_mnt_parent(env, current_vfsmount);
+    current_vfsmount_dentry = get_mnt_dentry(env, current_vfsmount);
+
+    // read and copy component
+    pcomp = read_dentry_name(env, current_vfsmount_dentry);
+    if (pcomps_idx == pcomps_capacity - 1) { // -1 leaves room for NULL termination
+      pcomps_capacity *= 2;
+      pcomps = (char **)g_realloc(pcomps, pcomps_capacity * sizeof(char *));
+    }
+    pcomps[pcomps_idx++] = pcomp;
+
+  } while(current_vfsmount != current_vfsmount_parent);
+
+  // reverse components order
+  pcomps_start = pcomps;
+  pcomps_end = &pcomps[pcomps_idx - 1];
+  while (pcomps_start < pcomps_end) {
+    pcomp = *pcomps_start;
+    *pcomps_start = *pcomps_end;
+    *pcomps_end = pcomp;
+    pcomps_start++;
+    pcomps_end--;
+  }
+
+  // join components and return
+  pcomps[pcomps_idx] = NULL;      // NULL terminate vector
+  name = g_strjoinv("", pcomps);  // slashes are included in pcomps
+  g_strfreev(pcomps);
+
+  return name;
 }
 
 /**

@@ -58,8 +58,8 @@ int panda_memory_errors;
  * @brief Resolves a file struct and returns its full pathname.
  */
 static char *get_file_name(CPUState *env, PTR file_struct) {
-    PTR file_dentry, file_mnt, current_mnt;
-    PTR current_mnt_parent, current_mnt_dentry, current_mnt_root_dentry;
+    char *name = NULL;
+    PTR file_dentry, file_mnt;
 
     // Read addresses for dentry, vfsmnt structs.
     file_dentry = get_file_dentry(env, file_struct);
@@ -70,6 +70,16 @@ static char *get_file_name(CPUState *env, PTR file_struct) {
         return NULL;
     }
 
+    char *s1, *s2;
+    s1 = read_vfsmount_name(env, file_mnt);
+    s2 = read_dentry_name(env, file_dentry);
+    name = g_strconcat(s1, s2, NULL);
+    //LOG_INFO("STARTED resolving " TARGET_FMT_PTR " %s%s", file_struct, s1, s2);
+    g_free(s1);
+    g_free(s2);
+
+    #if 0
+    PTR current_mnt, current_mnt_parent, current_mnt_dentry, current_mnt_root_dentry;
     LOG_INFO("STARTED resolving " TARGET_FMT_PTR, file_struct);
     current_mnt = file_mnt;
     int i = 0;
@@ -98,8 +108,9 @@ static char *get_file_name(CPUState *env, PTR file_struct) {
         }
         current_mnt = current_mnt_parent;
     } while(i++ < 10);
+    #endif
 
-    return NULL;
+    return name;
 }
 
 
@@ -245,7 +256,7 @@ void on_get_processes(CPUState *env, OsiProcs **out_ps) {
                 continue;
             }
             if (fd_file == (PTR)NULL) {
-                LOG_INFO("%s fd%d not used.", p->name, fdn);
+                //LOG_INFO("%s fd%d not used.", p->name, fdn);
                 continue;
             }
 
