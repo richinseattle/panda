@@ -223,8 +223,9 @@ void on_get_processes(CPUState *env, OsiProcs **out_ps) {
 		memset(p, 0, sizeof(OsiProc));
 		fill_osiproc(env, p, ts_current);
 
+#if 0
 		/*********************************************************/
-		// TESTING FD RESOLUTION
+		// Test of fd -> name resolution.
 		/*********************************************************/
 		for (int fdn=0; fdn<10; fdn++) {
 			char *s = get_fd_name(env, ts_current, fdn);
@@ -232,6 +233,7 @@ void on_get_processes(CPUState *env, OsiProcs **out_ps) {
 			g_free(s);
 		}
 		/*********************************************************/
+#endif
 
 		ts_current = get_task_struct_next(env, ts_current);
 	} while(ts_current != (PTR)NULL && ts_current != ts_first);
@@ -344,6 +346,17 @@ void on_free_osiprocs(OsiProcs *ps) {
 ****************************************************************** */
 char *osi_linux_resolve_fd(CPUState *env, OsiProc *p, int fd) {
 	char *name = get_fd_name(env, p->offset, fd);
+
+	if (unlikely(name == NULL)) goto make_name;
+
+	name = g_strchug(name);
+	if (unlikely(g_strcmp0(name, "") == 0)) goto make_name;
+
+	return name;
+
+make_name:
+	g_free(name);
+	name = g_strdup_printf("FD%d_%d", fd, (int)p->pid);
 	return name;
 }
 

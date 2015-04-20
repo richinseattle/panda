@@ -78,13 +78,13 @@ union syscall_arg SyscallInfo::get_arg(int n, size_t sz) const {
 
 		case SYSCALL_ARG_PTR:
 			if (sz == 0) {
-			// only interested in the value of the pointer
-			r.pval = (TARGET_PTR)this->args[n].pval;
+				// only interested in the value of the pointer
+				r.pval = (TARGET_PTR)this->args[n].pval;
 			}
 			else{
-			// interested in the actual data
-			r.buf = (uint8_t *)g_malloc(sz);
-			panda_virtual_memory_rw(this->env, this->args[n].pval, r.buf, sz, 0);
+				// interested in the actual data
+				r.buf = (uint8_t *)g_malloc(sz);
+				panda_virtual_memory_rw(this->env, this->args[n].pval, r.buf, sz, 0);
 			}
 		break;
 

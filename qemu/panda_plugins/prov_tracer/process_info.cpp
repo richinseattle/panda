@@ -152,9 +152,14 @@ void ProcInfo::syscall_end(CPUState *env) {
 		// Check return status.
 		if (unlikely(rval < 0)) break;
 
+		// Retrieve filename by resolving fd. This will yield
+		// the full path of files, vs the argument supplied
+		// to open().
+		char *filename = osi_linux_resolve_fd(env, &(this->p), rval);
+
 		// Retrieve arguments.
-		arg = this->syscall->get_arg(0, 128);
-		PERMIT_UNUSED char *filename = arg.sval;
+		//arg = this->syscall->get_arg(0, 128);
+		//PERMIT_UNUSED char *filename = arg.sval;
 		arg = this->syscall->get_arg(1, 0);
 		PERMIT_UNUSED int flags = arg.intval;
 		//arg = this->syscall->get_arg(2, 0);
@@ -168,9 +173,6 @@ void ProcInfo::syscall_end(CPUState *env) {
 			this->fhist.push_back( (*fdpair).second );
 			this->fmap.erase(fdpair);
 		}
-
-		// TEST
-		LOG_INFO("LOL %s", osi_linux_resolve_fd(env, &(this->p), rval));
 
 		// Add new fd mapping.
 		this->fmap.insert(std::make_pair(rval, new FileInfo(filename, flags)));
@@ -189,7 +191,9 @@ void ProcInfo::syscall_end(CPUState *env) {
 		// Move file to history.
 		auto fdpair = this->fmap.find(fd);
 		if (unlikely(fdpair == this->fmap.end())) {
-			LOG_WARN("%s: no mapping found for fd%d during %s.", this->label().c_str(), fd, this->syscall->get_name());
+			LOG_WARN("%s: no mapping found for fd%d during %s. Ignoring fd%d.",
+				this->label().c_str(), fd, this->syscall->get_name(), fd
+			);
 			break;
 		}
 		this->fhist.push_back( (*fdpair).second );
@@ -215,27 +219,18 @@ void ProcInfo::syscall_end(CPUState *env) {
 		// Retrieve FileInfo.
 		auto fdpair = this->fmap.find(fd);
 		if (unlikely(fdpair == this->fmap.end())) {
-			LOG_WARN("%s: no mapping for fd%d during %s - creating one.", this->label().c_str(), fd, this->syscall->get_name());
+			char *filename = osi_linux_resolve_fd(env, &(this->p), fd);
 
-			char *filename;
+			LOG_WARN("%s: no mapping for fd%d during %s - creating one to %s.",
+				this->label().c_str(), fd, this->syscall->get_name(), filename
+			);
+
 			int flags;
 			switch(fd) {
-				case 0:
-					filename = g_strdup_printf("stdin_%d", (int)this->p.pid);
-					flags = O_RDONLY;
-				break;
-				case 1:
-					filename = g_strdup_printf("stdout_%d", (int)this->p.pid);
-					flags = O_WRONLY;
-				break;
-				case 2:
-					filename = g_strdup_printf("stderr_%d", (int)this->p.pid);
-					flags = O_WRONLY;
-				break;
-				default:
-					filename = g_strdup_printf("FD%d_%d", fd, (int)this->p.pid);
-					flags = (nr == SYSCALL_WRITE) ? O_RDWR : O_RDONLY;
-				break;
+				case 0: flags = O_RDONLY; break;
+				case 1: flags = O_WRONLY; break;
+				case 2: flags = O_WRONLY; break;
+				default: flags = (nr == SYSCALL_WRITE) ? O_RDWR : O_RDONLY; break;
 			}
 			auto fdpair_ins = this->fmap.insert(std::make_pair(fd, new FileInfo(filename, flags)));
 			fdpair = fdpair_ins.first;
