@@ -8,8 +8,9 @@ extern "C" {
 #include "panda_plugin.h"
 #include "panda_plugin_plugin.h"
 #include "../osi/osi_types.h"		/**< Introspection data types. */
-#include "../osi/osi_ext.h"		/**< Introspection API. */
+#include "../osi/osi_ext.h"			/**< Introspection API. */
 #include "../osi/os_intro.h"		/**< Introspection callbacks. */
+#include "../osi_linux/osi_linux_ext.h"	/**< Linux specific introspection API. */
 #include "syscalls/syscallents.h"
 
 #include <stdio.h>
@@ -274,6 +275,9 @@ void on_finished_process(CPUState *env, OsiProc *p) {
 	delete pi;
 }
 
+
+void EXTERN_API_INIT_process_info();
+
 bool init_plugin(void *self) {
 	// timestamp
 	std::time_t start_time = std::time(NULL);
@@ -287,26 +291,35 @@ bool init_plugin(void *self) {
 	// load syscalls table
 	char *syscalls_dlname = NULL;
 	if (g_strcmp0(guest_os, "linux") == 0) {
-	syscalls_dlname = g_strdup_printf("panda_%s_syscallents_%s.so", PLUGIN_NAME, SYSCALLS_LINUX);
-	ERRNO_CLEAR;
-	if (
-		((syscalls_dl = dlopen(syscalls_dlname, RTLD_NOW)) == NULL) ||
-		((syscalls = (struct syscall_entry *)dlsym(syscalls_dl, "syscalls")) == NULL)
-	) {
-		LOG_ERROR("%s", dlerror());
-		goto error1;
-	}
+		syscalls_dlname = g_strdup_printf("panda_%s_syscallents_%s.so", PLUGIN_NAME, SYSCALLS_LINUX);
+		ERRNO_CLEAR;
+		if (
+			((syscalls_dl = dlopen(syscalls_dlname, RTLD_NOW)) == NULL) ||
+			((syscalls = (struct syscall_entry *)dlsym(syscalls_dl, "syscalls")) == NULL)
+		) {
+			LOG_ERROR("%s", dlerror());
+			goto error1;
+		}
 	}
 	else {
-	LOG_ERROR("Unsupported OS: %s", guest_os);
-	goto error0;
+		LOG_ERROR("Unsupported OS: %s", guest_os);
+		goto error0;
 	}
 
 	// initialize osi api
 	if (!init_osi_api()) {
-	LOG_ERROR("OSI API failed to initialize.");
-	goto error1;
+		LOG_ERROR("OSI API failed to initialize.");
+		goto error1;
 	}
+
+	// initialize osi_linux extra api
+	if (!init_osi_linux_api()) {
+		LOG_ERROR("OSI Linux API failed to initialize.");
+		goto error1;
+	}
+
+	// initialize plugin apis in other source files
+	EXTERN_API_INIT_process_info();
 
 #if defined(TARGET_I386)
 	// initialize panda stuff

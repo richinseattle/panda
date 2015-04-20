@@ -6,7 +6,7 @@
  */
 
 extern "C" {
-#include "../osi/osi_types.h"		/**< Introspection data types. */
+#include "../osi/osi_types.h"			/**< Introspection data types. */
 #include "syscalls/syscallents.h"
 }
 #include <glib.h>
@@ -95,7 +95,6 @@ class ProcInfo {
 	private:
 		bool logged;
 		SyscallInfo *syscall;
-
 };
 typedef std::unordered_map<target_ulong, ProcInfo *> ProcInfoMap;
 

@@ -14,8 +14,20 @@ extern "C" {
 
 extern "C" {
 extern struct syscall_entry *syscalls;	  /**< Syscalls info table. */
+#include "../osi_linux/osi_linux_ext.h"	/**< Linux specific introspection API. */
 }
 
+// *******************************************************************
+// Initialization of other plugin APIs called in this source file.
+// *******************************************************************
+void EXTERN_API_INIT_process_info() {
+	if (!init_osi_linux_api()) {
+		LOG_ERROR("OSI Linux API failed to initialize in " __FILE__ ".");
+	}
+	else{
+		LOG_INFO("OSI Linux API initialized in " __FILE__ ".");
+	}
+}
 
 // *******************************************************************
 // ProcInfo definitions
@@ -156,6 +168,9 @@ void ProcInfo::syscall_end(CPUState *env) {
 			this->fhist.push_back( (*fdpair).second );
 			this->fmap.erase(fdpair);
 		}
+
+		// TEST
+		LOG_INFO("LOL %s", osi_linux_resolve_fd(env, &(this->p), rval));
 
 		// Add new fd mapping.
 		this->fmap.insert(std::make_pair(rval, new FileInfo(filename, flags)));

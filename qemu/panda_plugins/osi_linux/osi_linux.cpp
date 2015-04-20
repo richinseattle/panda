@@ -15,6 +15,7 @@ extern "C" {
 #include "panda_plugin_plugin.h"
 #include "../osi/osi_types.h"
 #include "../osi/os_intro.h"
+#include "osi_linux_int_fns.h"
 
 #include <glib.h>
 #include <stdio.h>
@@ -335,6 +336,18 @@ void on_free_osiprocs(OsiProcs *ps) {
 	g_free(ps);
 	return;
 }
+
+
+
+/* ******************************************************************
+ osi_linux extra API
+****************************************************************** */
+char *osi_linux_resolve_fd(CPUState *env, OsiProc *p, int fd) {
+	char *name = get_fd_name(env, p->offset, fd);
+	return name;
+}
+
+
 
 /**
  * @brief PPP callback to free memory allocated for an OsiModules struct.
