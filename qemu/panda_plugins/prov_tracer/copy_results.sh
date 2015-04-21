@@ -18,3 +18,9 @@ for i in $(seq 1 99); do
     echo "Results in $d..."
     break
 done
+
+if [ ! -f "$d"/lol.pdf ]; then 
+    if pgrep dot -x -U "$(whoami)" > /dev/null; then
+        echo "dot still running. It may take a while before pdf output appears in $d."
+    fi
+fi
