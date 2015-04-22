@@ -9,7 +9,7 @@ debianwheezyx86intro
 #keyfind
 #memstats
 taint
-#taint2
+taint2
 #memdump
 #correlatetaps
 memsnap
@@ -20,7 +20,7 @@ callstack_instr
 #textprinter_fast
 #tstringsearch
 #network
-#scissors
+scissors
 #taint_compute_numbers
 #bir
 #replaymovie
@@ -36,7 +36,7 @@ osi_linux
 osi_test
 #win7x86intro
 #memstrings
-#asidstory
+asidstory
 #file_taint
 #win7proc
 #ida_taint
