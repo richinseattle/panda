@@ -86,6 +86,8 @@ class ProcInfo {
 		std::string label() const;
 		void syscall_start(CPUState *env);
 		void syscall_end(CPUState *env);
+		uint64_t started_pts() const;
+		uint64_t ended_pts() const;
 
 		OsiProc p;				/**< OsiProc struct. */
 		bool is_fresh;			/**< Process is still "fresh". */
@@ -94,6 +96,8 @@ class ProcInfo {
 
 	private:
 		bool logged;
+		uint64_t started_pts_;
+		uint64_t ended_pts_;
 		SyscallInfo *syscall;
 };
 typedef std::unordered_map<target_ulong, ProcInfo *> ProcInfoMap;

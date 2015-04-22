@@ -4,6 +4,7 @@ extern "C" {
 #include "config.h"
 #include "qemu-common.h"
 #include "cpu.h"
+#include "rr_log.h"			/**< Replay instruction count. */
 }
 #include <iostream>
 #include <sstream>
@@ -37,12 +38,16 @@ ProcInfo::ProcInfo(OsiProc *p) {
 	this->syscall = NULL;
 	this->is_fresh = true;
 	this->logged = false;
+	this->started_pts_ = rr_get_guest_instr_count();
+	this->ended_pts_ = 0;
 
 	// Don't log exec here. Process is still fresh.
 	//PROVLOG_EXEC(this);
 }
 
 ProcInfo::~ProcInfo(void) {
+	this->ended_pts_ = rr_get_guest_instr_count();
+
 	// Move currently open files to history.
 	for (auto fdpair=this->fmap.begin(); fdpair!=this->fmap.end(); ++fdpair) {
 		this->fhist.push_back( (*fdpair).second );
@@ -99,6 +104,16 @@ ProcInfo::~ProcInfo(void) {
 	g_free(this->p.name);
 	if (this->syscall != NULL) delete this->syscall;
 }
+
+/*!
+ * @brief Returns the process start pseudo-timestamp.
+ */
+uint64_t ProcInfo::started_pts() const { return this->started_pts_; }
+
+/*!
+ * @brief Returns the process finish pseudo-timestamp.
+ */
+uint64_t ProcInfo::ended_pts() const { return this->ended_pts_; }
 
 std::string ProcInfo::label() const {
 	std::ostringstream ss;

@@ -16,6 +16,7 @@ from pprint import pprint
 rdf_header = dedent('''
     @prefix prov: <http://www.w3.org/ns/prov#> .
     @prefix rdfs: <http://www.w3.org/2000/01/rdf-schema#> .
+    @prefix rdf: <http://www.w3.org/1999/02/22-rdf-syntax-ns#> .
 ''').strip()
 
 rdf_exec_fmt = dedent('''
@@ -39,6 +40,11 @@ rdf_generated_fmt = dedent('''
 
 rdf_derived_fmt = dedent('''
     <file:{file_url1}> prov:wasDerivedFrom <file:{file_url2}> .
+''').strip()
+
+rdf_duration_fmt = dedent('''
+    <exe://{program_url}> prov:startedAtTime {started_pts} .
+    <exe://{program_url}> prov:endedAtTime {ended_pts} .
 ''').strip()
 
 #### program types ##################################################
@@ -121,7 +127,13 @@ def process_g(data):
     )
 
 def process_q(data):
-    pass
+    # line format: q:<asid>:<process label>:<started_pts>:<ended_pts>
+    asid, process, started_pts, ended_pts = data
+    print rdf_duration_fmt.format(
+        program_url = process,
+        started_pts = started_pts,
+        ended_pts = ended_pts,
+    )
 
 def process_u(data):
     global s

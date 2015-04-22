@@ -43,7 +43,9 @@ static inline void PROVLOG_EXEC(const ProcInfo *pi) {
 	prov_out << "x:" << pi->p.asid << ":" << pi->label() << std::endl;
 }
 static inline void PROVLOG_QUIT(const ProcInfo *pi) {
-	prov_out << "q:" << pi->p.asid << ":" << pi->label() << std::endl;
+	prov_out << "q:" << pi->p.asid << ":" << pi->label() << ":"
+		<< pi->started_pts() << ":" << pi->ended_pts()
+	<< std::endl;
 }
 static inline void PROVLOG_P2F(const ProcInfo *pi, const FileInfo *fi, const char mode) {
 	switch(mode) {
