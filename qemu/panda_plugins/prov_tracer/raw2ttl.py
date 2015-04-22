@@ -8,9 +8,9 @@ import sys
 import fileinput
 import string
 import urllib
+import mimetypes
 from textwrap import dedent
 from pprint import pprint
-
 
 #### constants and formats ##########################################
 rdf_header = dedent('''
@@ -19,25 +19,51 @@ rdf_header = dedent('''
 ''').strip()
 
 rdf_exec_fmt = dedent('''
-    <exe://{url_program}> a prov:Activity . 
+    <exe://{program_url}> a prov:Activity . 
+    <exe://{program_url}> rdf:type "{program_type}" .
 ''').strip()
 
 rdf_open_fmt = dedent('''
-    <file:{url_file}> a prov:Entity .
-    <file:{url_file}> rdfs:label "{label}" .
+    <file:{file_url}> a prov:Entity .
+    <file:{file_url}> rdfs:label "{label}" .
+    <file:{file_url}> rdfs:type "{file_type}" .
 ''').strip()
 
 rdf_used_fmt = dedent('''
-    <exe://{url_program}> prov:used <file:{url_file}> .
+    <exe://{program_url}> prov:used <file:{file_url}> .
 ''').strip()
 
 rdf_generated_fmt = dedent('''
-    <file:{url_file}> prov:wasGeneratedBy <exe://{url_program}> .
+    <file:{file_url}> prov:wasGeneratedBy <exe://{program_url}> .
 ''').strip()
 
 rdf_derived_fmt = dedent('''
-    <file:{url_file1}> prov:wasDerivedFrom <file:{url_file2}> .
+    <file:{file_url1}> prov:wasDerivedFrom <file:{file_url2}> .
 ''').strip()
+
+#### program types ##################################################
+def get_program_type(process):
+    prog_types = {
+        'vi':           'editor',
+        'vim':          'editor',
+        'nano':         'editor',
+        'pico':         'editor',
+        'sh':           'shell',
+        'bash':         'shell',
+        'zsh':          'shell',
+        'cron':         'daemon',
+        'acpid':        'daemon',
+        'dbus-daemon':  'daemon',
+        'rpcbind':      'daemon',
+        'init':         'daemon',
+        'tar':          'fileutil',
+        'unzip':        'fileutil',
+        'gzip':         'fileutil',
+        'zip':          'fileutil',
+        'ls':           'shellutil',
+    }
+    exe, pid = process.rsplit('~', 1)
+    return prog_types[exe] if exe in prog_types else exe
 
 #### exceptions #####################################################
 class Error(Exception):
@@ -64,11 +90,11 @@ def process_d(data):
     filename1, filename2 = data
     print rdf_derived_fmt.format(
         # prov toolbox has problems with url-quoted characters
-        # url_file1 = urllib.pathname2url(filename1),
-        url_file1 = filename1,
+        # file_url1 = urllib.pathname2url(filename1),
+        file_url1 = filename1,
         # prov toolbox has problems with url-quoted characters
-        # url_file2 = urllib.pathname2url(filename2),
-        url_file2 = filename2,
+        # file_url2 = urllib.pathname2url(filename2),
+        file_url2 = filename2,
     )
 
 def process_g(data):
@@ -80,17 +106,18 @@ def process_g(data):
     if filename not in s.files:
         print rdf_open_fmt.format(
             # prov toolbox has problems with url-quoted characters
-            # url_file = urllib.pathname2url(filename),
-            url_file = filename,
-            label = filename
+            # file_url = urllib.pathname2url(filename),
+            file_url = filename,
+            label = filename,
+            file_type = mimetypes.guess_type(filename)[0],
         )
         s.files.add(filename)
 
     print rdf_generated_fmt.format(
-        url_program = process,
+        program_url = process,
         # prov toolbox has problems with url-quoted characters
-        # url_file = urllib.pathname2url(filename),
-        url_file = filename,
+        # file_url = urllib.pathname2url(filename),
+        file_url = filename,
     )
 
 def process_q(data):
@@ -105,18 +132,19 @@ def process_u(data):
     if filename not in s.files:
         print rdf_open_fmt.format(
             # prov toolbox has problems with url-quoted characters
-            # url_file = urllib.pathname2url(filename),
-            url_file = filename,
-            label = filename
+            # file_url = urllib.pathname2url(filename),
+            file_url = filename,
+            label = filename,
+            file_type = mimetypes.guess_type(filename)[0],
         )
         s.files.add(filename)
 
     #print triple
     print rdf_used_fmt.format(
-        url_program = process,
+        program_url = process,
         # prov toolbox has problems with url-quoted characters
-        # url_file = urllib.pathname2url(filename),
-        url_file = filename,
+        # file_url = urllib.pathname2url(filename),
+        file_url = filename,
     )
 
 def process_x(data):
@@ -126,7 +154,8 @@ def process_x(data):
     process = ':'.join(process.split(';'))
 
     print rdf_exec_fmt.format(
-        url_program = process,
+        program_url = process,
+        program_type = get_program_type(process),
     )
 
 class Raw2TTLState:
@@ -157,7 +186,7 @@ if __name__ == "__main__":
 
         try:
             # call proper handler 
-            print '# Debug line: '+line.strip()
+            # print '# Debug line: '+line.strip()
             globals()['process_'+op](data)
         except KeyError:
             # Keep bad line as comment.
@@ -177,8 +206,8 @@ if __name__ == "__main__":
     #if ufd in s.derived:
         #for filename2 in s.derived[ufd]:
             #print rdf_derived_fmt.format(
-                #url_file1 = 'file://'+urllib.pathname2url(filename1),
-                #url_file2 = 'file://'+urllib.pathname2url(filename2),
+                #file_url1 = 'file://'+urllib.pathname2url(filename1),
+                #file_url2 = 'file://'+urllib.pathname2url(filename2),
             #)
         #del s.derived[ufd]
 
@@ -212,11 +241,11 @@ if __name__ == "__main__":
     #if filename in s.generated:
         #print rdf_generated_fmt.format(
             ## prov toolbox has problems with url-quoted characters
-            ## url_program = urllib.pathname2url(s.exe),
-            #url_program = s.exe,
+            ## program_url = urllib.pathname2url(s.exe),
+            #program_url = s.exe,
             ## prov toolbox has problems with url-quoted characters
-            ## url_file = urllib.pathname2url(filename),
-            #url_file = filename,
+            ## file_url = urllib.pathname2url(filename),
+            #file_url = filename,
         #)
         #s.generated.remove(filename)
 

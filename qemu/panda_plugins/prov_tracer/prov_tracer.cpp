@@ -38,10 +38,10 @@ void uninit_plugin(void *);
 void on_new_process(CPUState *, OsiProc *);
 }
 
-void *syscalls_dl;					  /**< DL handle for syscalls table. */
+void *syscalls_dl;					/**< DL handle for syscalls table. */
 struct syscall_entry *syscalls;		/**< Syscalls table. */
 ProcInfoMap pimap;
-std::ofstream prov_out;			/**< Provenance output stream. */
+std::ofstream prov_out;				/**< Provenance output stream. */
 
 
 // ****************************************************************************
