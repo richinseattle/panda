@@ -53,7 +53,7 @@ OsiProcs *ProcState::OsiProcsSubset(ProcMap *m, PidSet *s) {
 	if (ps->num == 0) goto error;
 
 	return ps;
-	
+
 error:
 	free_osiprocs(ps);
 	return NULL;
@@ -62,7 +62,7 @@ error:
 /*! @brief Updates the ProcState with the new process set.
  * If `in` and `out` are not NULL, the new and finished processes
  * will be returned through them.
- * 
+ *
  * @note For efficiency (i.e. to avoid an additional copy),
  * the passed `ps` becomes part of the ProcState.
  * Therefore, it must not be freed by the caller.

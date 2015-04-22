@@ -11,6 +11,6 @@ typedef void (*on_free_osimodules_t)(OsiModules *ms);
 #ifdef OSI_PROC_EVENTS
 typedef void (*on_new_process_t)(CPUState *, OsiProc *);
 typedef void (*on_finished_process_t)(CPUState *, OsiProc *);
-#endif 
+#endif
 
 #endif 
