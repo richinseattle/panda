@@ -9,6 +9,7 @@ import fileinput
 import string
 import urllib
 import mimetypes
+import re
 from textwrap import dedent
 from pprint import pprint
 
@@ -21,13 +22,13 @@ rdf_header = dedent('''
 
 rdf_exec_fmt = dedent('''
     <exe://{program_url}> a prov:Activity . 
-    <exe://{program_url}> rdf:type "{program_type}" .
+    <exe://{program_url}> rdf:type dt:{program_type} .
 ''').strip()
 
 rdf_open_fmt = dedent('''
     <file:{file_url}> a prov:Entity .
     <file:{file_url}> rdfs:label "{label}" .
-    <file:{file_url}> rdfs:type "{file_type}" .
+    <file:{file_url}> rdf:type dt:{file_type} .
 ''').strip()
 
 rdf_used_fmt = dedent('''
@@ -50,23 +51,23 @@ rdf_duration_fmt = dedent('''
 #### program types ##################################################
 def get_program_type(process):
     prog_types = {
-        'vi':           'editor',
-        'vim':          'editor',
-        'nano':         'editor',
-        'pico':         'editor',
-        'sh':           'shell',
-        'bash':         'shell',
-        'zsh':          'shell',
-        'cron':         'daemon',
-        'acpid':        'daemon',
-        'dbus-daemon':  'daemon',
-        'rpcbind':      'daemon',
-        'init':         'daemon',
-        'tar':          'fileutil',
-        'unzip':        'fileutil',
-        'gzip':         'fileutil',
-        'zip':          'fileutil',
-        'ls':           'shellutil',
+        'vi':           'Editor',
+        'vim':          'Editor',
+        'nano':         'Editor',
+        'pico':         'Editor',
+        'sh':           'Shell',
+        'bash':         'Shell',
+        'zsh':          'Shell',
+        'cron':         'Daemon',
+        'acpid':        'Daemon',
+        'dbus-daemon':  'Daemon',
+        'rpcbind':      'Daemon',
+        'init':         'Daemon',
+        'tar':          'Fileutil',
+        'unzip':        'Fileutil',
+        'gzip':         'Fileutil',
+        'zip':          'Fileutil',
+        'ls':           'Shellutil',
     }
     exe, pid = process.rsplit('~', 1)
     return prog_types[exe] if exe in prog_types else exe
@@ -110,12 +111,14 @@ def process_g(data):
     process = ':'.join(process.split(';'))
 
     if filename not in s.files:
+        file_type = mimetypes.guess_type(filename)[0]
+        file_type = re.sub(r'\W+', '', file_type) if file_type else "Unknown"
         print rdf_open_fmt.format(
             # prov toolbox has problems with url-quoted characters
             # file_url = urllib.pathname2url(filename),
             file_url = filename,
             label = filename,
-            file_type = mimetypes.guess_type(filename)[0],
+            file_type = file_type,
         )
         s.files.add(filename)
 
@@ -142,12 +145,14 @@ def process_u(data):
     process = ':'.join(process.split(';'))
 
     if filename not in s.files:
+        file_type = mimetypes.guess_type(filename)[0]
+        file_type = re.sub(r'\W+', '', file_type) if file_type else "Unknown"
         print rdf_open_fmt.format(
             # prov toolbox has problems with url-quoted characters
             # file_url = urllib.pathname2url(filename),
             file_url = filename,
             label = filename,
-            file_type = mimetypes.guess_type(filename)[0],
+            file_type = file_type,
         )
         s.files.add(filename)
 
