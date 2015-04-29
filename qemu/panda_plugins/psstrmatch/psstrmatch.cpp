@@ -55,7 +55,9 @@ void on_ssm(CPUState *env, target_ulong pc, target_ulong addr, uint8_t *matched_
 	EXIT_ON_ERROR(p_it == pmap.end(), "No process match.");
 
 	OsiProc *p = (*p_it).second;
-	std::cout << p->name << "(" << p->pid << "):" << (is_write ? 'w' : 'r') << ":" << (char *)matched_string << std::endl;
+	std::cout << PLUGIN_NAME << ":" << p->name << "(" << p->pid << "):"
+		<< (is_write ? 'w' : 'r') << ":" << (char *)matched_string
+		<< std::endl;
 }
 
 // PGD write callback.
