@@ -45,6 +45,9 @@ void uninit_plugin(void *);
 typedef std::unordered_map<target_ulong, OsiProc *> OsiProcMap;
 OsiProcMap pmap;
 
+// Choose output format.
+#define TTL_OUTPUT
+
 // String match callback.
 void on_ssm(CPUState *env, target_ulong pc, target_ulong addr, uint8_t *matched_string, uint32_t matched_string_lenght, bool is_write) {
 	//prog_point p;
@@ -55,9 +58,17 @@ void on_ssm(CPUState *env, target_ulong pc, target_ulong addr, uint8_t *matched_
 	EXIT_ON_ERROR(p_it == pmap.end(), "No process match.");
 
 	OsiProc *p = (*p_it).second;
+#ifdef TTL_OUTPUT
+	std::cout << PLUGIN_NAME
+		<< "<exe://" << p->name << "~" << p->pid << "> "
+		<< ":hasMemText" << " \"" << (char *)matched_string << "\" ."
+		<< std::endl;
+#else
 	std::cout << PLUGIN_NAME << ":" << p->name << "(" << p->pid << "):"
 		<< (is_write ? 'w' : 'r') << ":" << (char *)matched_string
 		<< std::endl;
+#endif
+
 }
 
 // PGD write callback.
