@@ -59,7 +59,7 @@ void on_ssm(CPUState *env, target_ulong pc, target_ulong addr, uint8_t *matched_
 
 	OsiProc *p = (*p_it).second;
 #ifdef TTL_OUTPUT
-	std::cout << PLUGIN_NAME
+	std::cout << PLUGIN_NAME << ":"
 		<< "<exe://" << p->name << "~" << p->pid << "> "
 		<< ":hasMemText" << " \"" << (char *)matched_string << "\" ."
 		<< std::endl;
