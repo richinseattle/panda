@@ -13,8 +13,8 @@ CXXFLAGS+=-std=c++11
 LIBS+=-ldistorm3
 
 # temporary - remove optimizations
-QEMU_CFLAGS:=$(filter-out -O2, $(QEMU_CFLAGS))
-QEMU_CXXFLAGS:=$(filter-out -O2, $(QEMU_CXXFLAGS))
+#QEMU_CFLAGS:=$(filter-out -O2, $(QEMU_CFLAGS))
+#QEMU_CXXFLAGS:=$(filter-out -O2, $(QEMU_CXXFLAGS))
 
 # Dynamic libraries for translating system calls.
 # Use gen_tables_linux.py script to generate these.

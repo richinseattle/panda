@@ -12,12 +12,14 @@ import mimetypes
 import re
 from textwrap import dedent
 from pprint import pprint
+import datetime
 
 #### constants and formats ##########################################
 rdf_header = dedent('''
     @prefix prov: <http://www.w3.org/ns/prov#> .
     @prefix rdfs: <http://www.w3.org/2000/01/rdf-schema#> .
     @prefix rdf: <http://www.w3.org/1999/02/22-rdf-syntax-ns#> .
+    @prefix dt: <http://m000.github.com/ns/v1/desktop#> .
 ''').strip()
 
 rdf_exec_fmt = dedent('''
@@ -48,6 +50,10 @@ rdf_duration_fmt = dedent('''
     <exe://{program_url}> prov:endedAtTime {ended_pts} .
 ''').strip()
 
+#### time formatr - you guessed it, for provToolbox #################
+time_fmt = lambda t: t
+#time_fmt = lambda t: datetime.datetime.fromtimestamp(float(t)).isoformat() # --doesn't work
+
 #### program types ##################################################
 def get_program_type(process):
     prog_types = {
@@ -70,7 +76,9 @@ def get_program_type(process):
         'ls':           'Shellutil',
     }
     exe, pid = process.rsplit('~', 1)
-    return prog_types[exe] if exe in prog_types else exe
+
+    # provToolbox doesn't like dots in dt:
+    return prog_types[exe] if exe in prog_types else exe.replace('.', '')
 
 #### exceptions #####################################################
 class Error(Exception):
@@ -90,7 +98,6 @@ class TagFormatError(Error):
         self.tagspec = tagspec
     def __str__(self):
         return "Cannot parse '%s' into tags." % (self.tagspec)
-
 
 #### handlers for entry lines #######################################
 def process_d(data):
@@ -134,8 +141,8 @@ def process_q(data):
     asid, process, started_pts, ended_pts = data
     print rdf_duration_fmt.format(
         program_url = process,
-        started_pts = started_pts,
-        ended_pts = ended_pts,
+        started_pts = time_fmt(started_pts),
+        ended_pts = time_fmt(ended_pts),
     )
 
 def process_u(data):
@@ -200,6 +207,9 @@ if __name__ == "__main__":
         # split and unquote data
         op, data = line.strip().split(':', 1)
         data = map(urllib.unquote, data.split(':'))
+
+        # provToolbox hack - eliminate ':' which cause problems
+        data = map(lambda s: s.replace(':', '+'), data)
 
         try:
             # call proper handler 
