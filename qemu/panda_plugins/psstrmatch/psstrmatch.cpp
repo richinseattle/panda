@@ -44,31 +44,27 @@ void uninit_plugin(void *);
 // Globals.
 typedef std::unordered_map<target_ulong, OsiProc *> OsiProcMap;
 OsiProcMap pmap;
-
-// Choose output format.
-#define TTL_OUTPUT
+std::ofstream ttlout;
 
 // String match callback.
 void on_ssm(CPUState *env, target_ulong pc, target_ulong addr, uint8_t *matched_string, uint32_t matched_string_lenght, bool is_write) {
-	//prog_point p;
-	//memset(&p, 0, sizeof(prog_point));
-	//get_prog_point(env, &p);
 	auto asid_physical = _PGD;
 	auto p_it = pmap.find(asid_physical);
 	EXIT_ON_ERROR(p_it == pmap.end(), "No process match.");
 
 	OsiProc *p = (*p_it).second;
-#ifdef TTL_OUTPUT
-	std::cout << PLUGIN_NAME << ":"
-		<< "<exe://" << p->name << "~" << p->pid << "> "
-		<< ":hasMemText" << " \"" << (char *)matched_string << "\" ."
-		<< std::endl;
-#else
+
+	// Write ttl.
+	if (ttlout.is_open()) {
+		ttlout << "<exe://" << p->name << "~" << p->pid << "> "
+			<< ":hasMemText" << " \"" << (char *)matched_string << "\" ."
+			<< std::endl;
+	}
+
+	// Write stdout log.
 	std::cout << PLUGIN_NAME << ":" << p->name << "(" << p->pid << "):"
 		<< (is_write ? 'w' : 'r') << ":" << (char *)matched_string
 		<< std::endl;
-#endif
-
 }
 
 // PGD write callback.
@@ -93,8 +89,14 @@ int vmi_pgd_changed(CPUState *env, target_ulong oldval, target_ulong newval) {
 
 bool init_plugin(void *self) {
 	// retrieve plugin arguments
-	//panda_arg_list *plugin_args = panda_get_args(PLUGIN_NAME);
-	//if (plugin_args != NULL) panda_free_args(plugin_args);
+	panda_arg_list *plugin_args = panda_get_args(PLUGIN_NAME);
+	const char *ttlout_f = panda_parse_string(plugin_args, "ttl", NULL);
+	if (ttlout_f) {
+		ttlout.open (ttlout_f);
+		EXIT_ON_ERROR(ttlout.is_open() == false, "Couldn't open %s for writing ttl.", ttlout_f);
+		ttlout << "@prefix dt: <http://https://m000.github.com/ns/v1/desktop#> ." <<  std::endl;
+	}
+	if (plugin_args != NULL) panda_free_args(plugin_args);
 
 	// Initialize osi API.
 	if (!init_osi_api()) {
@@ -117,6 +119,7 @@ error1:
 }
 
 void uninit_plugin(void *self) {
+	if (ttlout.is_open()) { ttlout.close(); }
 }
 
 /* vim:set tabstop=4 softtabstop=4 noexpandtab */
