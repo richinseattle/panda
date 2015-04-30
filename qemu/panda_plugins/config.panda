@@ -5,7 +5,7 @@ debianwheezyx86intro
 #textprinter
 #syscalls
 #syscalls2
-#stringsearch
+stringsearch
 #keyfind
 #memstats
 taint
@@ -25,6 +25,7 @@ scissors
 #bir
 #replaymovie
 #useafterfree
+psstrmatch
 #bufmon
 #memsavep
 #tralign

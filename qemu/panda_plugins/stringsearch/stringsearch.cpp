@@ -85,8 +85,6 @@ int n_callers = 16;
 // and the function used by other plugins to register a fn (add_on_ssm)
 PPP_CB_BOILERPLATE(on_ssm)
 
-// this creates the 
-
 int mem_callback(CPUState *env, target_ulong pc, target_ulong addr,
                        target_ulong size, void *buf, bool is_write,
                        std::map<prog_point,string_pos> &text_tracker) {
