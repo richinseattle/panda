@@ -31,7 +31,7 @@ psstrmatch
 #tralign
 #fdtracker
 #printstack
-#tainted_branch
+tainted_branch
 osi
 osi_linux
 osi_test
