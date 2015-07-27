@@ -41,13 +41,18 @@ in the list at the right point.
 #define PPP_MAX_CB 256
 
 
-// use this in extern "C" { blob at head of A plugin
+// use this at head of A plugin
+#ifdef __cplusplus
+#define PPP_PROT_REG_CB(cb_name) \
+extern "C" { \
+void ppp_add_cb_##cb_name(cb_name##_t fptr) ;				\
+void ppp_add_cb_##cb_name##_slot(cb_name##_t fptr, int slot_num) ; \
+}
+#else
 #define PPP_PROT_REG_CB(cb_name) \
 void ppp_add_cb_##cb_name(cb_name##_t fptr) ;				\
-void ppp_add_cb_##cb_name##_slot(cb_name##_t fptr, int slot_num) ;     
-
-
-
+void ppp_add_cb_##cb_name##_slot(cb_name##_t fptr, int slot_num) ;
+#endif
 
 /*
   employ this somewhere in the plugin near the top.
@@ -76,6 +81,9 @@ void ppp_add_cb_##cb_name##_slot(cb_name##_t fptr, int slot_num) {	\
   ppp_##cb_name##_num_cb = MAX(slot_num, ppp_##cb_name##_num_cb);	\
 }									
 
+#define PPP_CB_EXTERN(cb_name) \
+extern cb_name##_t ppp_##cb_name##_cb[PPP_MAX_CB]; \
+extern int ppp_##cb_name##_num_cb;
 
 /*
   And employ this where you want the callback functions to be called 

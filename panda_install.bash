@@ -31,13 +31,14 @@ cwd=$(pwd)
 cd /tmp
 
 progress "Trying to install LLVM 3.3..."
-if ! sudo apt-get -y install llvm-3.3-dev clang-3.3
+if ! sudo apt-get -y install libc++-dev llvm-3.3-dev clang-3.3
 then
   progress "Couldn't find OS package for LLVM 3.3. Proceeding without..."
 fi
 
 if [ ! -e "/usr/local/lib/libdistorm3.so" ]
 then
+  sudo apt-get -y install unzip
   curl -O http://ragestorm.net/distorm/distorm3.3-package.zip
   unzip distorm3.3-package.zip
   cd distorm3/make/linux

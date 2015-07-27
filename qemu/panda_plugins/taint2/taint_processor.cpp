@@ -105,21 +105,21 @@ Shad *tp_init(TaintLabelMode mode, TaintGranularity granularity) {
 
     if (granularity == TAINT_GRANULARITY_BYTE) {
         printf("taint2: Creating byte-level taint processor\n");
-        shad->ram = new FastShad(ram_size);
+        shad->ram = new FastShad("RAM", ram_size);
         // we're working with LLVM values that can be up to 128 bits
-        shad->llv = new FastShad(MAXFRAMESIZE * FUNCTIONFRAMES * MAXREGSIZE);
-        shad->ret = new FastShad(MAXREGSIZE);
+        shad->llv = new FastShad("LLVM", MAXFRAMESIZE * FUNCTIONFRAMES * MAXREGSIZE);
+        shad->ret = new FastShad("Ret", MAXREGSIZE);
         // guest registers are generally the size of the guest architecture
-        shad->grv = new FastShad(NUMREGS * WORDSIZE);
+        shad->grv = new FastShad("Reg", NUMREGS * WORDSIZE);
     } else {
         printf("taint2: Creating word-level taint processor\n");
-        shad->ram = new FastShad(ram_size / WORDSIZE);
-        shad->llv = new FastShad(MAXFRAMESIZE * FUNCTIONFRAMES);
-        shad->ret = new FastShad(1);
-        shad->grv = new FastShad(NUMREGS);
+        shad->ram = new FastShad("RAM", ram_size / WORDSIZE);
+        shad->llv = new FastShad("LLVM", MAXFRAMESIZE * FUNCTIONFRAMES);
+        shad->ret = new FastShad("Ret", 1);
+        shad->grv = new FastShad("Reg", NUMREGS);
     }
 
-    shad->gsv = new FastShad(sizeof(CPUState));
+    shad->gsv = new FastShad("CPUState", sizeof(CPUState));
 
     return shad;
 }
@@ -171,35 +171,35 @@ LabelSetP tp_labelset_get(Shad *shad, Addr *a) {
 }
 
 
-uint32_t tp_tcn_get(Shad *shad, Addr a) {
+TaintData tp_query_full(Shad *shad, Addr a) {
     assert(shad != NULL);
     switch (a.typ) {
     case HADDR:
         // TRL FIXME
-        return 0; // had_dir_find_64(shad->hd, a.val.ha+a.off);
+        return TaintData(); // had_dir_find_64(shad->hd, a.val.ha+a.off);
     case MADDR:
-        return shad->ram->query_tcn(a.val.ma+a.off);
+        return shad->ram->query_full(a.val.ma+a.off);
     case IADDR:
         // TRL FIXME
-        return 0; // shad_dir_find_64(shad->io, a.val.ia+a.off);
+        return TaintData(); // shad_dir_find_64(shad->io, a.val.ia+a.off);
     case PADDR:
         // TRL FIXME
-        return 0; //        return shad_dir_find_32(shad->ports, a.val.pa+a.off);        
+        return TaintData(); //        return shad_dir_find_32(shad->ports, a.val.pa+a.off);
     case LADDR:
-        return shad->llv->query_tcn(a.val.la*MAXREGSIZE + a.off);
+        return shad->llv->query_full(a.val.la*MAXREGSIZE + a.off);
     case GREG:
-        return shad->grv->query_tcn(a.val.gr * WORDSIZE + a.off);
+        return shad->grv->query_full(a.val.gr * WORDSIZE + a.off);
     case GSPEC:
-        // SpecAddr enum is offset by the number of guest registers                                                                                                                             
-        return shad->gsv->query_tcn(a.val.gs - NUMREGS + a.off);
+        // SpecAddr enum is offset by the number of guest registers
+        return shad->gsv->query_full(a.val.gs - NUMREGS + a.off);
     case CONST:
-        return 0;
+        return TaintData();
     case RET:
-        return shad->ret->query_tcn(a.off);
+        return shad->ret->query_full(a.off);
     default:
         assert(false);
     }
-    return 0;
+    return TaintData();
 }
 
 
@@ -213,13 +213,13 @@ LabelSetP tp_query(Shad *shad, Addr a) {
 }
 
 
-// returns rendered label set 
+// returns rendered label set
 LabelSetP tp_query_ram(Shad *shad, uint64_t pa) {
     Addr a = make_maddr(pa);
     return tp_query(shad, a);
 }
 
-// returns rendered label set 
+// returns rendered label set
 LabelSetP tp_query_reg(Shad *shad, int reg_num, int offset) {
     Addr a = make_greg(reg_num, offset);
     return tp_query(shad, a);
@@ -231,10 +231,10 @@ LabelSetP tp_query_llvm(Shad *shad, int reg_num, int offset) {
     return tp_query(shad, a);
 }
 
-// returns taint compute # 
+// returns taint compute #
 uint32_t tp_query_tcn(Shad *shad, Addr a) {
     assert (shad != NULL);
-    return tp_tcn_get(shad, a);
+    return tp_query_full(shad, a).tcn;
 }
 
 uint32_t tp_query_tcn_ram(Shad *shad, uint64_t pa) {
@@ -252,7 +252,14 @@ uint32_t tp_query_tcn_llvm(Shad *shad, int reg_num, int offset) {
     return tp_query_tcn(shad, a);
 }
 
-
+// returns CB mask.
+uint64_t tp_query_cb_mask(Shad *shad, Addr a, uint8_t size) {
+    uint64_t cb_mask = 0;
+    for (unsigned i = 0; i < size; i++, a.off++) {
+        cb_mask |= tp_query_full(shad, a).cb_mask << (i * 8);
+    }
+    return cb_mask;
+}
 
 uint32_t ls_card(LabelSetP ls) {
     return label_set_render_set(ls).size();
@@ -260,14 +267,14 @@ uint32_t ls_card(LabelSetP ls) {
 
 
 
-// iterate over 
+// iterate over
 void tp_lsr_iter(std::set<uint32_t> rendered, int (*app)(uint32_t el, void *stuff1), void *stuff2) {
-    for (uint32_t el : rendered) {     
+    for (uint32_t el : rendered) {
         //        printf ("el=%d\n", el);
         if ((app(el, stuff2)) != 0) break;
     }
 }
-    
+
 // retrieve ls for this addr
 void tp_ls_iter(LabelSetP ls, int (*app)(uint32_t el, void *stuff1), void *stuff2) {
     std::set<uint32_t> rendered = label_set_render_set(ls);
@@ -275,14 +282,14 @@ void tp_ls_iter(LabelSetP ls, int (*app)(uint32_t el, void *stuff1), void *stuff
 }
 
 void tp_ls_a_iter(Shad *shad, Addr *a, int (*app)(uint32_t el, void *stuff1), void *stuff2) {
-    // retrieve the tree-representation of the 
+    // retrieve the tree-representation of the
     LabelSetP ls = tp_labelset_get(shad, a);
     if (ls == NULL) return;
     tp_ls_iter(ls, app, stuff2);
 }
 
 void tp_ls_ram_iter(Shad *shad, uint64_t pa, int (*app)(uint32_t el, void *stuff1), void *stuff2) {
-    Addr a = make_maddr(pa);    
+    Addr a = make_maddr(pa);
     tp_ls_a_iter(shad, &a, app, stuff2);
 }
 
@@ -305,7 +312,7 @@ void tp_delete(Shad *shad, Addr *a) {
     switch (a->typ) {
         case HADDR:
             // NB: just returns if nothing there
-            shad_dir_mem_64(shad->hd, a->val.ha+a->off); 
+            shad_dir_mem_64(shad->hd, a->val.ha+a->off);
             shad_dir_remove_64(shad->hd, a->val.ha+a->off);
             break;
         case MADDR:
@@ -479,7 +486,7 @@ void fprintf_addr(Shad *shad, Addr *a, FILE *fp) {
     break;
   case LADDR:
     if (a->flag == FUNCARG){
-      fprintf(fp,"l%lld[%d]", 
+      fprintf(fp,"l%lld[%d]",
 	      (long long unsigned int) a->val.la, a->off);
     }
     else {
@@ -498,7 +505,7 @@ void fprintf_addr(Shad *shad, Addr *a, FILE *fp) {
       fprintf(fp,"irrelevant");
     }
     //else if (a->flag == READLOG) {
-    else if (a->typ == UNK){ 
+    else if (a->typ == UNK){
       fprintf(fp,"unknown");
     }
     else {

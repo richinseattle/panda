@@ -8,7 +8,7 @@
 #include "../../panda/panda_addr.h"
 
 typedef void *LabelSetP;
-
+typedef void Panda__TaintQuery;
 
 // turns on taint
 void taint2_enable_taint(void);
@@ -30,6 +30,10 @@ uint32_t taint2_query_tcn(Addr a);
 uint32_t taint2_query_tcn_ram(uint64_t pa);
 uint32_t taint2_query_tcn_reg(int reg_num, int offset);
 uint32_t taint2_query_tcn_llvm(int reg_num, int offset);
+
+// Returns a mask indicating which bits are attacker-controlled (derived
+// reversibly from input).
+uint64_t taint2_query_cb_mask(Addr a, uint8_t size);
 
 // delete taint from this phys addr
 void taint2_delete_ram(uint64_t pa) ;
@@ -68,7 +72,9 @@ void taint2_track_taint_state(void);
 // writes an entry to pandalog with lots of stuff like
 // label set, taint compute #, call stack
 // offset is needed since this is likely a query in the middle of an extent (of 4, 8, or more bytes)
-uint8_t taint2_query_pandalog (Addr addr, uint32_t offset) ;
+Panda__TaintQuery *taint2_query_pandalog (Addr addr, uint32_t offset) ;
 
+// used to free memory associated with that struct
+void pandalog_taint_query_free(Panda__TaintQuery *tq);
 
 #endif                                                                                   

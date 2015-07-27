@@ -84,10 +84,12 @@ private:
 
     Constant *constSlot(LLVMContext &ctx, Value *value);
     Constant *constWeakSlot(LLVMContext &ctx, Value *value);
+    Constant *constInstr(LLVMContext &ctx, Instruction *I);
     int intValue(Value *value);
     unsigned getValueSize(Value *V);
     bool getAddr(Value *addrVal, Addr& addrOut);
     bool isCPUStateAdd(BinaryOperator *AI);
+    bool isIrrelevantAdd(BinaryOperator *AI);
     bool isEnvPtr(Value *loadVal);
     void inlineCall(CallInst *CI);
     void inlineCallAfter(Instruction &I, Function *F, vector<Value *> &args);
@@ -150,6 +152,8 @@ public:
     Constant *retConst;
 
     Constant *prevBbConst;
+
+    Type *instrT;
 
     PandaTaintVisitor(Shad *shad, taint2_memlog *taint_memlog)
         : shad(shad), taint_memlog(taint_memlog) {}

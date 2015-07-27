@@ -20,6 +20,8 @@ Support
 ----
 If you need help with PANDA, or want to discuss the project, you can join our IRC channel at #panda-re on Freenode, or join the [PANDA mailing list](http://mailman.mit.edu/mailman/listinfo/panda-users).
 
+We've begin working on a basic manual (really more of a quickstart guide) [here](docs/manual.md).
+
 PANDA Plugins
 ----
 Details about the architecture-neutral plugin interface can be
@@ -52,6 +54,10 @@ Construction (CC), Rome, Italy, March 2013.
 * [3] B. Dolan-Gavitt, J. Hodosh, P. Hulin, T. Leek, R. Whelan.  
 Repeatable Reverse Engineering for the Greater Good with PANDA.
 TR CUCS-023-14
+
+* [4] M. Stamatogiannakis, P. Groth, H. Bos. Decoupling Provenance
+Capture and Analysis from Execution. 7th USENIX Workshop on the Theory
+and Practice of Provenance, Edinburgh, Scotland, July 2015.
 
 License
 ----

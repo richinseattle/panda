@@ -9,11 +9,9 @@ extern "C" {
 #include "panda_plugin_plugin.h"
 
 extern "C" {
-#include "gen_syscalls_ext_typedefs_windows7_x86.h"   // osarch
-#include "gen_syscall_ppp_register_return_windows7_x86.cpp"  // osarch
+#include "gen_syscalls_ext_typedefs.h"
+#include "gen_syscall_ppp_extern_return.h"
 }
-
-#include "gen_syscall_ppp_boilerplate_return_windows7_x86.cpp" // osarch
 
 void syscall_return_switch_windows7_x86 ( CPUState *env, target_ulong pc, target_ulong ordinal) {  // osarch
 #ifdef TARGET_I386                                          // GUARD
@@ -2160,8 +2158,8 @@ uint32_t arg0 = get_return_32(env, 0);
 PPP_RUN_CB(on_NtYieldExecution_return, env,pc,arg0) ; 
 }; break;
 default:
-PPP_RUN_CB(on_unknown_sys_windows7_x86_return, env, pc, EAX);
+PPP_RUN_CB(on_unknown_sys_return, env, pc, EAX);
 }
-PPP_RUN_CB(on_all_sys_windows7_x86_return, env, pc, EAX);
+PPP_RUN_CB(on_all_sys_return, env, pc, EAX);
 #endif
  } 
