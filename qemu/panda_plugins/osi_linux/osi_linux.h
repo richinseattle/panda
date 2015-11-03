@@ -12,8 +12,8 @@
  *
  *
  * @author Manolis Stamatogiannakis <manolis.stamatogiannakis@vu.nl>
- * @copyright	 This work is licensed under the terms of the GNU GPL, version 2.
- *							See the COPYING file in the top-level directory. 
+ * @copyright This work is licensed under the terms of the GNU GPL, version 2.
+ * See the COPYING file in the top-level directory.
  */
 #ifndef OSI_LINUX_H
 #define OSI_LINUX_H
@@ -26,7 +26,7 @@
  * @brief Pointer type of the guest VM.
  *
  * @note This definition implies that the guest VM pointer size matches the
- * size of unsigned long of the target processor. This is a reasonable 
+ * size of unsigned long of the target processor. This is a reasonable
  * assumption to make -- at least in the context of a research prototype.
  */
 #define PTR target_ulong
@@ -109,33 +109,33 @@ extern int panda_memory_errors;
  * @brief IMPLEMENT_OFFSET_GET is a macro for generating uniform
  * inlines for retrieving data based on a location+offset.
  */
-#define IMPLEMENT_OFFSET_GET(_name, _paramName, _retType, _offset, _errorRetValue)												\
-static inline _retType _name(CPUState* env, PTR _paramName) {																						 \
-	_retType _t;																																														\
+#define IMPLEMENT_OFFSET_GET(_name, _paramName, _retType, _offset, _errorRetValue) \
+static inline _retType _name(CPUState* env, PTR _paramName) { \
+	_retType _t; \
 	if (-1 == panda_virtual_memory_rw(env, _paramName + _offset, (uint8_t *)&_t, sizeof(_retType), 0)) { \
-		panda_memory_errors++;																																								\
-		return (_errorRetValue);																																							\
-	}																																																			 \
-	return (_t);																																														\
+		panda_memory_errors++; \
+		return (_errorRetValue); \
+	} \
+	return (_t); \
 }
 
 /**
  * @brief IMPLEMENT_OFFSET_GET2L is a macro for generating uniform
  * inlines for retrieving data based on a *(location+offset1) + offset2.
  */
-#define IMPLEMENT_OFFSET_GET2L(_name, _paramName, _retType1, _offset1, _retType2, _offset2, _errorRetValue)	 \
-static inline _retType2 _name(CPUState* env, PTR _paramName) {																								\
-	_retType1 _t1;																																															\
-	_retType2 _t2;																																															\
-	if (-1 == panda_virtual_memory_rw(env, _paramName + _offset1, (uint8_t *)&_t1, sizeof(_retType1), 0)) {	\
-		panda_memory_errors++;																																										\
-		return (_errorRetValue);																																									\
-	}																																																					 \
-	if (-1 == panda_virtual_memory_rw(env, _t1 + _offset2, (uint8_t *)&_t2, sizeof(_retType2), 0)) {				 \
-		panda_memory_errors++;																																										\
-		return (_errorRetValue);																																									\
-	}																																																					 \
-	return (_t2);																																															 \
+#define IMPLEMENT_OFFSET_GET2L(_name, _paramName, _retType1, _offset1, _retType2, _offset2, _errorRetValue) \
+static inline _retType2 _name(CPUState* env, PTR _paramName) { \
+	_retType1 _t1; \
+	_retType2 _t2; \
+	if (-1 == panda_virtual_memory_rw(env, _paramName + _offset1, (uint8_t *)&_t1, sizeof(_retType1), 0)) { \
+		panda_memory_errors++; \
+		return (_errorRetValue); \
+	} \
+	if (-1 == panda_virtual_memory_rw(env, _t1 + _offset2, (uint8_t *)&_t2, sizeof(_retType2), 0)) { \
+		panda_memory_errors++; \
+		return (_errorRetValue); \
+	} \
+	return (_t2); \
 }
 
 
@@ -259,7 +259,7 @@ IMPLEMENT_OFFSET_GET2L(get_vma_dentry, vma_struct, PTR, ki.vma.vm_file_offset, P
  * @brief Retrieves the vfsmount dentry associated with a vma_struct.
  *
  * XXX: Reading the vfsmount dentry is required to get the full pathname of files not located in the root fs.
- *			This hasn't been implemented yet...
+ * This hasn't been implemented yet...
  */
 IMPLEMENT_OFFSET_GET2L(get_vma_vfsmount_dentry, vma_struct, PTR, ki.vma.vm_file_offset, PTR, ki.fs.f_path_dentry_offset, 0)
 
@@ -270,7 +270,7 @@ IMPLEMENT_OFFSET_GET(get_files, task_struct, PTR, ki.task.files_offset, 0)
 
 /**
  * @brief Retrieves the array of file structs from the files struct.
- *				The n-th element of the array corresponds to the n-th open fd.
+ * The n-th element of the array corresponds to the n-th open fd.
  */
 IMPLEMENT_OFFSET_GET2L(get_files_fds, files_struct, PTR, ki.fs.fdt_offset, PTR, ki.fs.fd_offset, 0)
 
@@ -298,7 +298,7 @@ IMPLEMENT_OFFSET_GET(get_mnt_dentry, vfsmount_struct, PTR, ki.fs.mnt_mountpoint_
  * @brief Retrieves the mnt_root dentry struct associated with a vfsmount struct.
  *
  * XXX: We don't use this anywhere. Marked for removal after verifying that we don't really need it. :)
- */ 
+ */
 IMPLEMENT_OFFSET_GET(get_mnt_root_dentry, vfsmount_struct, PTR, ki.fs.mnt_root_offset, 0)
 
 
@@ -514,6 +514,5 @@ static inline PTR get_task_struct_next(CPUState *env, PTR task_struct) {
 	else return tasks-ki.task.tasks_offset;
 }
 #endif
-
 
 /* vim:set tabstop=4 softtabstop=4 noexpandtab */

@@ -15,7 +15,7 @@ Sketch of some of the structures used for Linux OS introspection. Only relevant 
             struct file \*vm\_file {{     /\* file we map to (can be NULL): [fs.h][file], pp471 \*/
                 struct path f\_path {{   /\* not pointer!: [path.h][path] \*/
                     struct vfsmount \*mnt {{    /\* mounted fs containing file: [mount.h][vfsmount], pp486 \*/
-                        struct vfsmount \*mnt_parent; 
+                        struct vfsmount \*mnt_parent;
                         struct dentry \*mnt_mountpoint; /\* dentry of mountpoint: [dcache.h][dentry], pp475 \*/
                         struct dentry \*mnt_root; /\* root of the mounted tree: [dcache.h][dentry], pp475 \*/
                     }};
@@ -32,11 +32,11 @@ Sketch of some of the structures used for Linux OS introspection. Only relevant 
     }}; /\* mm\_struct \*/
     struct files\_struct \*files {{ /\* open files information: [fdtable.h][files_struct], ppXXX \*/
         struct fdtable *fdt {{   /\* ??? this may point to fdtab -- VERIFY : [fdtable.h][fdtable] \*/
-            struct file **fd {{  /\* current fd array: [XXX][XXX] \*/                     
+            struct file **fd {{  /\* current fd array: [XXX][XXX] \*/
             }};
         }};
         struct fdtable fdtab {{   /\* not pointer!: [fdtable.h][fdtable] \*/
-            struct file **fd {{  /\* current fd array: [XXX][XXX] \*/                     
+            struct file **fd {{  /\* current fd array: [XXX][XXX] \*/
             }};
         }};
     }}; /\* files\_struct \*/
