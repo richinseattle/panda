@@ -7,7 +7,7 @@ extern "C"{
 #include <sys/types.h>
 #include <sys/stat.h>
 #include <assert.h>
-
+#include <string.h>
 }
 
 #include "index.hpp"
@@ -31,7 +31,7 @@ void marshall_index_c(void *vpindc, void *vpindex, char *file_pfx);
 
 void marshall_invindex_c(void *vpindc, void *vpinv, char *file_pfx) ;
 
-void *unmarshall_preprocessed_scores_c (char *filename_pfx);
+void *unmarshall_preprocessed_scores_c (char *filename_pfx, void *vpindc);
 
 void query_with_passage_c (void *vpindc, void *vppassage, void *vppps, uint32_t *ind, float *score);
 
@@ -113,7 +113,7 @@ void spit_passage(Passage &passage) {
     printf ("uind=%d \n", passage.uind);
     // iterate over n
     for ( auto &kvp : passage.contents ) {
-        printf ("n=%d\n", kvp.first);
+        //        printf ("n=%d\n", kvp.first);
         spit_passage_dist(kvp.second);
     }
     printf ("Passage ]\n");
@@ -303,6 +303,7 @@ void index_this_passage(IndexCommon *indc, Index *index, uint8_t *binary_passage
     // maintain map a from binary passages to ints
     std::string sb = std::string((const char *) binary_passage, len);
     uint32_t uind;
+    // dont index same blob more than once
     if (index->binary_to_uind.find(sb) == index->binary_to_uind.end()) {
         uind = index->binary_to_uind.size();
         // this is a new passage, i.e., we haven't indexed this binary blob before
@@ -318,9 +319,6 @@ void index_this_passage(IndexCommon *indc, Index *index, uint8_t *binary_passage
     index->passages[passage_ind] = uind;
     // this is the total # of passages (not unique ones) indexed
     indc->num_passages ++;
-    //    if ((indc->num_passages % 100000) == 0) {
-    //        printf ("%lu passages\n", indc->num_passages);
-    //    }
     // keeps track of set of passages for this uind
     indc->uind_to_psgs[uind].insert(passage_ind);
 }
@@ -847,6 +845,8 @@ int unmarshall_row_fp(FILE *fp, InvIndex *inv, uint32_t n, const Gram gram, Gram
     //  printf ("occ=%d\n", occ);
     // some on-the-fly pruning
     if (occ > max_row_length) {
+        printf ("too big row.  occ=%d. discard\n", occ);
+        row.size=0;  // discard
         return 0;
     }
     resize_doc_word(row, occ);
@@ -863,7 +863,7 @@ std::map < uint32_t, uint32_t > unmarshall_doc_word_fp(FILE *fp, InvIndex *inv, 
     row.size = 0;
     row.counts = NULL;
     int ret = unmarshall_row_fp(fp, inv, n, gram, row);
-    assert (ret == 1);
+    //    assert (ret == 1);
     std::map < uint32_t, uint32_t > dw;
     for (uint32_t i=0; i<row.size; i++) {
         dw[row.counts[i].passage_ind] = row.counts[i].count;
@@ -901,18 +901,23 @@ void marshall_preprocessed_scores(IndexCommon *indc, PpScores *pps) {
     std::string filename = pfx + ".pp";
     FILE *fp = fopen((char *) filename.c_str(), "w");
     uint32_t num_mgrams = pps->scorerow.size();
-    WU(num_mgrams);
-    printf ("marshalling preprocessed scores for %d max_ngrams\n", num_mgrams);
-    int tot10 = num_mgrams/10;  
-    uint32_t i = 0;
-    for ( auto &kvp : pps->scorerow ) {
-        if ((i % tot10) == 0) { printf ("i=%d\n",i); }  
-        Gram gram = kvp.first;
-        WU(gram);
-        ScoreRow sr = kvp.second;
-        WU(sr.len);
-        fwrite ((void *) sr.el, sizeof(sr.el[0]), sr.len, fp);
-        i ++ ;
+    WU(indc->min_n_gram);
+    WU(indc->max_n_gram);
+    for (uint32_t n=indc->min_n_gram; n<=indc->max_n_gram; n++) {
+        uint32_t tot = pps->scorerow[n].size();
+        printf ("marshalling preprocessed scores for %d-grams: num=%d\n", n, tot);
+        WU(n);
+        WU(tot);
+        uint32_t i = 0;
+        for (auto &kvp : pps->scorerow[n]) {
+            if ((i % (tot/10)) == 0) { printf ("i=%d\n",i); }              
+            Gram gram = kvp.first;
+            WU(gram);
+            ScoreRow sr = kvp.second;
+            WU(sr.len);
+            fwrite ((void *) sr.el, sizeof(sr.el[0]), sr.len, fp);
+            i ++ ;
+        }
     }
     fclose (fp);
 }
@@ -922,26 +927,34 @@ void marshall_preprocessed_scores(IndexCommon *indc, PpScores *pps) {
 
 // unmarshalls the per-max-n-gram precomputed scores so that bir.cpp can be wicked fast
 // NB: this has to return a ptr to a PpScores for the C API to work
-PpScores *unmarshall_preprocessed_scores(std::string filename_pfx) {
+PpScores *unmarshall_preprocessed_scores(std::string filename_pfx, IndexCommon *indc) {
     PpScores *pps = new PpScores;
     std::string filename = filename_pfx + ".pp";
     FILE *fp = fopen((char *) filename.c_str(), "r");
-    uint32_t num_mgrams;
-    RU(num_mgrams);
-    printf ("unmarshalling preprocessed scores for %d max_ngrams\n", num_mgrams);
-    int tot10 = num_mgrams/10;
-    for (uint32_t i=0; i<num_mgrams; i++) {
-        if ((i % tot10) == 0) { printf ("i=%d\n",i); }
-        Gram gram;
-        RU(gram);
-        uint32_t rowsize;
-        RU(rowsize);
-        pps->scorerow[gram].len = rowsize;
-        pps->scorerow[gram].el = (Score *) malloc (sizeof (Score) * rowsize);
-        uint32_t nn = fread((void *) pps->scorerow[gram].el, sizeof (Score), rowsize, fp);
-        assert(nn==rowsize);
+    uint32_t min_n_gram, max_n_gram;
+    RU(min_n_gram);
+    RU(max_n_gram);
+    assert (min_n_gram == indc->min_n_gram);
+    assert (max_n_gram == indc->max_n_gram);
+    for (uint32_t n=min_n_gram; n<=max_n_gram; n++) {
+        uint32_t nn,tot;
+        RU(nn);
+        assert (n==nn);
+        RU(tot);
+        printf ("n=%d tot=%d\n", n, tot);
+        for (uint32_t i=0; i<tot; i++) {
+            if ((i % (tot/10)) == 0) { printf ("i=%d\n",i); }
+            Gram gram;
+            RU(gram);
+            uint32_t rowsize;
+            RU(rowsize);
+            pps->scorerow[n][gram].len = rowsize;
+            pps->scorerow[n][gram].el = (Score *) malloc (sizeof (Score) * rowsize);
+            uint32_t nr = fread((void *) pps->scorerow[n][gram].el, sizeof (Score), rowsize, fp);
+            assert(nr==rowsize);
+        }
     }
-    fclose(fp);
+    fclose (fp);
     printf ("done\n");
     return pps;
 }                
@@ -956,6 +969,8 @@ std::string get_passage_name(IndexCommon *indc, uint32_t passage_ind, uint32_t *
     auto x = (indc->first_passage_to_filename.upper_bound(passage_ind));
     x--;
     std::string filename = x->second;
+    *start_pos = passage_ind - x->first;
+    /*
     uint64_t offset;
     if ((passage_ind % 2) == 0) {
         uint32_t num_chunks = passage_ind / 2;
@@ -966,6 +981,7 @@ std::string get_passage_name(IndexCommon *indc, uint32_t passage_ind, uint32_t *
         offset = indc->passage_len_bytes/2 + num_chunks * indc->passage_len_bytes;
     }
     *start_pos = offset;
+    */
     return filename;
 }
 
@@ -1006,14 +1022,13 @@ InvIndex *invert(IndexCommon *indc, Index *index) {
 }     
 
 
-
+__attribute__((unused))
 static bool compare_scores (const Score & s1, const Score & s2) {
     return (s1.val > s2.val);
 }
 
 
 // query is a passage.  
-
 
 Score *score = NULL;
 uint32_t max_num_uind = 0;
@@ -1022,8 +1037,9 @@ uint32_t max_num_uind = 0;
   scorepair is preprocessed score arrays. let n = scorepare[max_n_gram].first.  
   scorepair[max_n_gram].second is a c array of n Score structs 
   scorepair[max_n_gram].second[i].ind is a passage ind and .val is the preprocessed score to add for that psg.
-*/ 
-void query_with_passage (IndexCommon *indc, Passage *query, PpScores *pps, uint32_t *ind, float *best_score) {
+*/
+void query_with_passage (IndexCommon *indc, Passage *query, PpScores *pps, uint32_t *ind, float *best_score,
+                         std::vector<Score> &topN, uint32_t n) {
     if (score == NULL) {
         score = (Score *) malloc (sizeof(Score) * indc->num_uind);
         max_num_uind = indc->num_uind;
@@ -1041,49 +1057,65 @@ void query_with_passage (IndexCommon *indc, Passage *query, PpScores *pps, uint3
     for (auto &kvp : query->contents[indc->max_n_gram].count)    {
         Gram gram = kvp.first;
         uint32_t gram_count = kvp.second;
-        if (pps->scorerow.find(gram) == pps->scorerow.end()) {
-            continue;
-        }
-        uint32_t rowsize = pps->scorerow[gram].len;
-        assert (rowsize < indc->num_uind);
-        Score *sp = pps->scorerow[gram].el;
-        for (uint32_t i=0; i<rowsize; i++) {
-            uint32_t uid = sp[i].ind; 
-            if (uid >= indc->num_uind) {
-                printf ("uid=%d num_uinq=%d\n", uid, indc->num_uind);
-                assert (uid < indc->num_uind);
+        ScoreRow *row=NULL;
+        // we will use for highest available n-gram, backing off to lower n-grams if needed
+        for (uint32_t n=indc->max_n_gram; n>=indc->min_n_gram; n--) {
+            if (pps->scorerow[n].find(gram) != pps->scorerow[n].end()) {
+                row = &(pps->scorerow[n][gram]);
+                break;
             }
-            score[uid].val += gram_count * sp[i].val;
         }
+        assert (row != NULL);
+        for (uint32_t i=0; i<row->len; i++) {
+            uint32_t uind = row->el[i].ind;
+            score[uind].val += gram_count * row->el[i].val;
+        }        
     }
-    // scale the scores
+    // scale the scores & determine the top N
     float max_score = -10000.0;
     uint32_t argmax = 0;
-    //    float min_score = 10000.0;
-    //    uint32_t argmin = 0;
+    // normalize scores for query length so that score is more like avg score per term for query
+    // necessary if queries are going to be on different length
     for (uint32_t i = 0; i < indc->num_uind; i++) {
         score[i].val /= query->contents[indc->max_n_gram].total;
+#if 0
+        // NB: all of this keeps track of topN scores
+        // Am I retarded?  Is there a simpler way? 
+        if (i<n) topN[i] = score[i];
+        if (i==n) std::sort (topN.begin(), topN.begin()+n, compare_scores);        
+        if (i>=n) {
+            if (compare_scores(score[i], topN[n-1])) {
+                // printf ("score[i] = %.3f\n", score[i].val);
+                // score[i] is bigger than min of topN.
+                // insert it and eject something from topN
+                // first find where it should go in the topN
+                uint32_t j;
+                bool foundit = false;
+                for (j=0; j<n; j++) {
+                    if (compare_scores(score[i], topN[j])) {
+                        // score[i] belongs at position j in the topN
+                        foundit = true;
+                        break;
+                    }
+                }
+                assert(foundit);
+                for (uint32_t k=n-1; k>j; k--)
+                    topN[k] = topN[k-1];
+                topN[j] = score[i];
+
+            }           
+        }
+#endif
+        // This keeps track of max
         if (score[i].val > max_score) {
             max_score = score[i].val;
-            argmax = i;
+            argmax = score[i].ind;
         }
     }
-    /*
-    std::sort (score.begin (), score.end (), compare_scores);  
-    for (uint32_t i=0; i<5; i++) {
-        printf ("%d %d %.4f\n", i, score[i].ind, score[i].val);
-        for ( auto &el : indc->uind_to_psgs[score[i].ind] ) {
-            printf ("%d ", el);
-        }
-        printf ("\n");
-    }
-    
-    printf ("min_score = %.5f\n", min_score);
-    */
+    // NB: this is a uind.  you'll have to use indc->uind_to_psgs to get actual psg #s 
     *ind = argmax;
     *best_score = max_score;
 }
-
 
 
 
@@ -1121,17 +1153,21 @@ void marshall_index_common_c(void *vpindc) {
     marshall_index_common(indc);
 }
 
-void *unmarshall_preprocessed_scores_c (char *filename_pfx) {
-    PpScores *pps = unmarshall_preprocessed_scores(std::string(filename_pfx));
+void *unmarshall_preprocessed_scores_c (char *filename_pfx, void *vpindc) {
+    std::string fpx = std::string(filename_pfx);
+    IndexCommon *indc = reinterpret_cast<IndexCommon *> (vpindc);
+    PpScores *pps = unmarshall_preprocessed_scores(fpx, indc);
     return reinterpret_cast <void *> (pps);
 }
 
+/*
 void query_with_passage_c (void *vpindc, void *vppassage, void *vppps, uint32_t *ind, float *score) {
     IndexCommon *indc = reinterpret_cast<IndexCommon *> (vpindc);
     Passage *passage = reinterpret_cast<Passage *>(vppassage);
     PpScores *pps = reinterpret_cast<PpScores *>(vppps);
     query_with_passage(indc, passage, pps, ind, score);
 }
+*/
 
 void *new_index_common_c(char *filename_prefix, 
                          uint32_t min_n_gram, uint32_t max_n_gram,

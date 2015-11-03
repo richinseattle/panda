@@ -23,17 +23,18 @@ extern "C" {
 #include "monitor.h"
 #include "cpu.h"
 #include "panda_plugin.h"
-#include "../taint/taint_ext.h"
+    //#include "../taint/taint_ext.h"
 #include "rr_log.h"
 #include "panda_plugin_plugin.h"
 
-
+#include "pandalog.h"
 
 #include <sys/types.h>
 #include <sys/stat.h>
 #include <unistd.h>
 #include <stdio.h>
 #include <assert.h>
+#include <sys/time.h>
 
 #include <stdio.h>
 #include <stdlib.h>
@@ -45,22 +46,25 @@ void uninit_plugin(void *);
 
 }
 
-#include "../taint/taint_processor.h"
+//#include "../taint/taint_processor.h"
 #include "panda_common.h"
 
 #include "index.hpp"
+#include <iostream>
+#include <sstream>
+#include <iomanip>
 
 
 #ifdef CONFIG_SOFTMMU
 
-
+#define UNKNOWN "unknown"
 
 // globals
-
+bool debug = false;
 PpScores *pps = NULL; 
 IndexCommon *indc = NULL;
 InvIndex *inv = NULL;
-
+bool ignore_bb_len = false;
 
 bool compare_scores (const Score & s1, const Score & s2) {
     return (s1.val > s2.val);
@@ -71,7 +75,6 @@ extern uint32_t max_row_length;
 
 
 extern "C" {
-#include <sys/time.h>
 }
 
 
@@ -220,7 +223,6 @@ float *pppqs= NULL;
 std::map < Gram, std::map < uint32_t, float > > sc;
 
 
-
 bool pdice (float prob_yes) {
     if ((((float) (rand ())) / RAND_MAX) < prob_yes) 
         return true;    
@@ -230,50 +232,170 @@ bool pdice (float prob_yes) {
 
 
 float pdice_prob = 1.0;
+FILE *output;
+target_ulong pc_start = 0;
+target_ulong pc_end = (target_ulong)~0UL;
 
 // cache of binary -> top ranked psg 
 // indexed by asid, then by pc
-std::map < uint32_t, std::map < uint32_t, std::string > >  bircache;
+typedef target_ulong Asid;
+typedef target_ulong Pc;
+typedef uint32_t Offset;
+typedef std::pair<Asid,Pc> AsidPc;
+typedef std::string Filename;
+typedef double BirScore;
+typedef std::tuple<Filename,Offset,BirScore> PsgInfo;
+std::map<AsidPc,PsgInfo> bircache;
 
 float sec;
 
 
+
+uint32_t run_length = 0;
+uint32_t longest_run = 0;
+
+void run_stats() {
+    //    printf ("run_stats: run_length = %d\n", run_length);
+    if (run_length > 40) {
+        //printf ("long run: %d\n", run_length);
+    }
+    if (run_length > longest_run) {
+        longest_run = run_length;
+        if (!pandalog) 
+            fprintf (output, "new longest run %d\n", longest_run);
+    }
+}
+
+void bir_plog(uint32_t len, bool cached, float score, std::string filename, uint32_t offset) {
+    Panda__Bir *bir = (Panda__Bir *) malloc (sizeof (Panda__Bir));
+    *bir = PANDA__BIR__INIT;
+    bir->len = len;
+    bir->cached = cached;
+    bir->highscore = score;
+    if (filename == UNKNOWN) {
+        bir->filename = NULL;
+        bir->has_offset = false;
+    }
+    else {
+        bir->filename = (char *) filename.c_str();
+        bir->has_offset = true;
+        bir->offset = offset;
+    }
+    Panda__LogEntry ple = PANDA__LOG_ENTRY__INIT;
+    ple.bir = bir;
+    pandalog_write_entry(&ple);
+    free(bir);
+}
+
+
+#define N 5
+std::vector<Score> topN(N);
+
 int bir_before_block_exec(CPUState *env, TranslationBlock *tb) {
-    if (tb->size > 16) {         
-        target_ulong asid = panda_current_asid(env);        
-        if ((bircache.count(asid) != 0) && (bircache[asid].count(tb->pc) != 0)) {
-            // its in the cache
-            printf ("pc=0x" TARGET_FMT_lx " len=%d  ", tb->pc, tb->size);
-            printf ("bir cache --  %s \n", bircache[asid][tb->pc].c_str());
+    if (tb->pc < pc_start || tb->pc >= pc_end) return 0;
+    if (tb->size < 3) return 0;
+    
+    target_ulong asid = panda_current_asid(env);
+    AsidPc asidpc = std::make_pair(asid,tb->pc);
+    if (bircache.count(asidpc) != 0) {
+        // its in the cache
+        auto psginfo = bircache[asidpc];
+        Filename filename = std::get<0>(psginfo);
+        Offset offset = std::get<1>(psginfo);
+        BirScore score = std::get<2>(psginfo);
+        if (filename == UNKNOWN) {
+            run_stats();
+            run_length = 0;
         }
         else {
-            // not in cache
-            uint8_t buf[4096];
-            uint32_t len = 4096;
-            if (tb->size < len) {
-                len = tb->size;
-            }
-            panda_virtual_memory_rw(env, tb->pc, (uint8_t *) buf, len, 0);    
+            run_length ++;
+        }
+        if (pandalog) {
+            bir_plog(tb->size, true, score, filename, offset);
+        }
+        else {
+            fprintf (output, "pc=0x" TARGET_FMT_lx " len=%d  ", tb->pc, tb->size);
+            fprintf (output, "birc -- %.3f %s-%x\n", score, (char *) filename.c_str(), offset);
+        }
+    }
+    else {
+        // not in cache
+        uint8_t buf[4096];
+        uint32_t len = 4096;
+        len = std::min((unsigned)tb->size, 4096U);
+        if (ignore_bb_len) 
+            len = std::max((unsigned)indc->passage_len_bytes, len);
+        int ret = panda_virtual_memory_rw(env, tb->pc, (uint8_t *) buf, len, 0);    
+        if (ret != -1) {
             Passage passage = index_passage (indc, /* update_lexicon = */ false,
                                              buf, len,
                                              /* note: we dont really care about passage ind */
                                              /* passage_ind = */ 0xdeadbeef);
             uint32_t argmax;
             float score;
-            query_with_passage (indc, &passage, pps, &argmax, &score);
-            printf ("pc=0x" TARGET_FMT_lx " len=%d  ", tb->pc, tb->size);
-            if ( score > 2.0 ) {
+            query_with_passage (indc, &passage, pps, &argmax, &score, topN, N);
+            if ( score > 0.2) {
                 uint32_t the_offset;
-                uint32_t psgid = *(indc->uind_to_psgs[argmax].begin());
-                std::string the_filename = get_passage_name(indc, psgid, &the_offset);            
-                bircache[asid][tb->pc] = the_filename + "-" + (std::to_string(the_offset));
-                printf ("bir -- %.3f %s\n", score, bircache[asid][tb->pc].c_str()); 
-           }      
+                uint32_t uind = argmax;               
+                uint32_t psgid = *(indc->uind_to_psgs[uind].begin());
+                run_length ++;
+                std::string the_filename = get_passage_name(indc, psgid, &the_offset);
+                //                printf ("psgid=%d the_offset=%d\n", psgid, the_offset);
+                std::stringstream ss;
+                ss << std::setprecision(3);
+                ss << score << " ";
+                ss << the_filename << "-" << std::hex << the_offset;
+                PsgInfo pi = std::make_tuple(the_filename, the_offset, score);
+                bircache[asidpc] = pi;
+                if (pandalog) {
+                    bir_plog(tb->size, false, score, the_filename, the_offset);
+                }
+                else {
+                    fprintf (output, "pc=0x" TARGET_FMT_lx " len=%d  ", tb->pc, tb->size);
+                    fprintf (output, "bir -- %s",  ss.str().c_str());               
+                }
+                
+                if (debug && score > 1) {
+                    printf ("\n");
+                    spit_passage(passage);
+                    uint32_t i;
+                    for (i=0; i<len; i++) {
+                        printf ("%02x ", buf[i]);
+                        if ((i % 8) == 0) printf ("   ");
+                        if ((i % 16) == 0) printf ("\n");
+                    }
+                    if (((i-1) % 16) != 0) printf ("\n");
+                    printf ("\n");
+                }
+                // this will spit out the topN
+                // NB: code to *compute* this is currently disabled in query_with_passage
+#if 0
+                for (auto s : topN) {
+                        psgid = *(indc->uind_to_psgs[s.ind].begin());
+                        std::string pname = get_passage_name(indc, psgid, &the_offset);            
+                        printf ("  %.5f\t%s %d %d\n", s.val, pname.c_str(), s.ind, psgid);
+                    }
+#endif
+            }      
             else {
-                printf ("bir -- %.3f unknown\n", score);
-                bircache[asid][tb->pc] = "unknown";
+                run_stats();
+                run_length = 0;
+                if (pandalog) {
+                    bir_plog(tb->size, false, score, UNKNOWN, 0);
+                }                       
+                else {
+                    fprintf (output, "pc=0x" TARGET_FMT_lx " len=%d  ", tb->pc, tb->size);
+                    fprintf (output, "bir -- %.3f unknown", score);
+                }                
+                PsgInfo pi = std::make_tuple("unknown", 0xdeadbeef, 0.0);
+                bircache[asidpc] = pi;
             }
-        }        
+            if (tb->size < 8) {
+                if (!pandalog) 
+                    fprintf(output, "  maybe 2small");
+            }
+            if (!pandalog) fprintf(output, "\n");
+        }
     }
     return 0;
 }
@@ -285,26 +407,35 @@ bool init_plugin(void *self) {
     panda_arg_list *args = panda_get_args("bir");
     if (args != NULL) {
         int i;
-        std::string pfx = "unk";
-        for (i = 0; i < args->nargs; i++) {
-            if (0 == strncmp(args->list[i].key, "pfx", 5)) {
-                pfx = std::string(args->list[i].value);
-            } else if (0 == strncmp(args->list[i].key, "max_row_length", 14)) {
-                max_row_length = atoi(args->list[i].value);
-            } else if (0 == strncmp(args->list[i].key, "pdice", 5)) {
-                pdice_prob = atof(args->list[i].value);
+        std::string pfx(panda_parse_string(args, "pfx", "unk"));
+        max_row_length = panda_parse_uint32(args, "max_row_length", 10000);
+        pdice_prob = panda_parse_double(args, "pdice", 1.0);
+
+        pc_start = panda_parse_ulong(args, "pc_start", 0);
+        pc_end = panda_parse_ulong(args, "pc_end", (target_ulong)~0UL);
+
+        ignore_bb_len = panda_parse_bool(args, "ignore_bb_len");
+        
+        if (!pandalog) {
+            const char *output_filename = panda_parse_string(args, "output", "");
+            printf("bir: writing to %s\n", output_filename);
+            if (strlen(output_filename) == 0) {
+                output = stdout;
+            } else {
+                output = fopen(output_filename, "w");
             }
         }
+        
         if (pfx.compare("none") == 0) {
             // we just want the api
             printf ("bir: I am only being used for my api fns.\n");
             return true;
         }
         else {
-            printf ("unmarshalling preprocessed scores\n");
-            pps = unmarshall_preprocessed_scores(pfx);                      
             printf ("unmarshalling index common\n");
             indc = unmarshall_index_common(pfx, true);
+            printf ("unmarshalling preprocessed scores\n");
+            pps = unmarshall_preprocessed_scores(pfx,indc);                      
             printf ("unmarshalling inverted index\n");
             inv = unmarshall_invindex_min (pfx, indc);            
             panda_cb pcb;
@@ -318,3 +449,8 @@ bool init_plugin(void *self) {
     return false;
 }
 
+void uninit_plugin(void *self) {
+    if (!pandalog) {
+        if (output != stdout) fclose(output);
+    }
+}
