@@ -207,7 +207,6 @@ void on_get_current_process(CPUState *env, OsiProc **out_p) {
 	OsiProc *p = NULL;
 	PTR ts;
 
-    target_long asid = panda_current_asid(env);
 	ts = get_task_struct(env, (_ESP & THREADINFO_MASK));
     if (ts) {
         // valid task struct
@@ -377,7 +376,6 @@ void on_free_osiprocs(OsiProcs *ps) {
 ****************************************************************** */
 
 char *osi_linux_fd_to_filename(CPUState *env, OsiProc *p, int fd) {
-    target_ulong asid = panda_current_asid(env);
     PTR ts_current = 0;
     ts_current = p->offset;
     if (ts_current == 0) {
@@ -403,7 +401,6 @@ make_name:
 
 
 unsigned long long  osi_linux_fd_to_pos(CPUState *env, OsiProc *p, int fd) {
-    target_ulong asid = panda_current_asid(env);
     PTR ts_current = 0;
     ts_current = p->offset;
     if (ts_current == 0) return INVALID_FILE_POS;
@@ -443,7 +440,7 @@ int vmi_pgd_changed(CPUState *env, target_ulong oldval, target_ulong newval) {
 	OsiModules *ms;
 	uint32_t i;
 
-	if (!_IN_KERNEL) {
+	if (!panda_in_kernel(env)) {
 		// This shouldn't ever happen, as PGD is updated only in kernel mode.
 		LOG_ERR("Can't do introspection in user mode.");
 		goto error;
