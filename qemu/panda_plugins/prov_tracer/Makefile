@@ -35,7 +35,7 @@ $(PLUGIN_TARGET_DIR)/panda_$(PLUGIN_NAME)_syscallents_%.so: syscalls/syscallents
 	$(call quiet-command,$(CC) -shared -o $@ $^,"  SYSCALL DEFS  $@")
 
 $(PLUGIN_TARGET_DIR)/panda_$(PLUGIN_NAME).so: $(PLUGIN_OBJFILES)
-	$(call quiet-command,$(CXX) $(filter-out $(CXXFLAGS_EXCLUDE), $(QEMU_CFLAGS)) -shared -o $@ $^ $(LIBS),"  PLUGIN  $@")
+	$(call quiet-command,$(CXX) $(filter-out $(CXXFLAGS_EXCLUDE), $(QEMU_CFLAGS)) -shared -o $@ $^ $(LDFLAGS) $(LIBS),"  PLUGIN  $@")
 
 all: $(PLUGIN_OBJ_DIR) $(SYSCALLENTS_DL) $(PLUGIN_TARGET_DIR)/panda_$(PLUGIN_NAME).so
 
