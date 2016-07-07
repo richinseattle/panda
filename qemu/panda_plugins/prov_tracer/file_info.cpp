@@ -116,15 +116,16 @@ void FileInfo::update_name_escaped() {
 	escaped << std::hex;
 
 	for (char *cp = this->name_; *cp!='\0'; cp++) {
-	// this would produce the equivalent to url encoding
-	// if (!(isalnum(*cp) || *cp == '-' || *cp == '_' || *cp == '.' || *cp == '~')) {
+		// this would produce the equivalent to url encoding
+		// if (!(isalnum(*cp) || *cp == '-' || *cp == '_' || *cp == '.' || *cp == '~')) {
 
-	if (unlikely(iscntrl(*cp) || *cp == ':' || (isspace(*cp) && !isblank(*cp)))) {
-		//	   non printable  raw separator			line control
-		escaped << '%' << std::setw(2) << int((unsigned char) *cp);
-		continue;
-	}
-	escaped << *cp;
+		if (unlikely(iscntrl(*cp) || *cp == ':' || (isspace(*cp) && !isblank(*cp)))) {
+			//			^^^				^^^						^^^
+			//		non printable	raw separator			line control
+			escaped << '%' << std::setw(2) << int((unsigned char) *cp);
+			continue;
+		}
+		escaped << *cp;
 	}
 	g_free(this->name_escaped_);
 	this->name_escaped_ = g_strdup(escaped.str().c_str());
