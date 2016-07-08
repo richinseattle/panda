@@ -30,6 +30,7 @@ memsavep
 #tralign
 #fdtracker
 printstack
+prov_tracer
 tainted_branch
 osi
 osi_linux

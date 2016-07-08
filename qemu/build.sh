@@ -42,7 +42,7 @@ if [ ! -f config-host.mak ]; then
     --disable-xen \
     --disable-libiscsi \
     $LLVM_BIT \
-    --extra-cflags="-O2 -I/usr/local/include" \
+    --extra-cflags="-O2 -I/usr/local/include -DOSI_PROC_EVENTS" \
     --extra-cxxflags="-O2" \
     --extra-ldflags="-L/usr/local/lib -L/usr/local/lib64 -lprotobuf-c -lprotobuf -lpthread"
 else
