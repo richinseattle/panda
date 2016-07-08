@@ -171,6 +171,9 @@ void ProcInfo::syscall_end(CPUState *env) {
 		// the full path of files, vs the argument supplied
 		// to open().
 		char *filename = osi_linux_fd_to_filename(env, &(this->p), rval);
+		if (filename == NULL) {
+			filename = g_strdup_printf("(%d|fd%d)", (int)(&(this->p))->pid, rval);
+		}
 
 		// Retrieve arguments.
 		//arg = this->syscall->get_arg(0, 128);
@@ -235,6 +238,9 @@ void ProcInfo::syscall_end(CPUState *env) {
 		auto fdpair = this->fmap.find(fd);
 		if (unlikely(fdpair == this->fmap.end())) {
 			char *filename = osi_linux_fd_to_filename(env, &(this->p), fd);
+			if (filename == NULL) {
+				filename = g_strdup_printf("(%d|fd%d)", (int)(&(this->p))->pid, fd);
+			}
 
 			LOG_WARN("%s: no mapping for fd%d during %s - creating one to %s.",
 				this->label().c_str(), fd, this->syscall->get_name(), filename
