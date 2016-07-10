@@ -9,6 +9,7 @@ extern "C" {
 #include <stdlib.h>
 #include <stdint.h>
 #include <string.h>
+#include "pandalog.h"
 }
 
 
@@ -16,7 +17,6 @@ extern "C" {
 #include <tuple>
 #include <vector>
 
-#include "pandalog.h"
 
 
 
@@ -156,7 +156,7 @@ typedef struct flow_struct {
 
     
 void print_flow(Flow &flow) {
-    printf("instr=%lld  pc=0x%x ", flow.instr, flow.pc);
+    printf("instr=%lld  pc=0x%lx ", (long long int)flow.instr, flow.pc);
     if (flow.dir == In) {
         print_store(flow.store);
         printf (" -> ");

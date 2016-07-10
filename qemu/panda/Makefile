@@ -1,25 +1,45 @@
+# Note: LDFLAGS go before object files during linking. LDLIBS go after.
+
+RM=rm -f
+CC=gcc
+CXX=g++
+PROTOCC=protoc-c
+PROTOPYC=protoc
+PROTOPARSE=../pp.py
+
+CPPFLAGS+=-I.. -DPANDALOG_READER
+CFLAGS+=-g -O0
+CXXFLAGS+=-g -O0 -std=c++11
+LDLIBS+=-L/usr/local/lib -lprotobuf-c -lz 
+
+PANDALOG_TOOLS=pandalog_reader stuw #tainted_instr
+PANDALOG_COMMON_OBJS=pandalog.o pandalog.pb-c.o
+PANDALOG_READER_OBJS=pandalog_print.o pandalog_reader.o
+PANDALOG_PROTO_IN=$(wildcard ../panda_plugins/*/*.proto)
+PANDALOG_CLEAN_EXTRA=$(PANDALOG_TOOLS) pandalog.pb-c.c pandalog_pb2.py pandalog.proto
 
 
- 
-all: pandalog_reader
+.PHONY: all clean
 
-pandalog.pb-c.o: pandalog.pb-c.c
-	gcc -c pandalog.pb-c.c -I .. -g -O0
+all: $(PANDALOG_TOOLS) pandalog_pb2.py
 
-pandalog_print.o: pandalog_print.c 
-	gcc -c pandalog_print.c  -g -O0 
+# PANDALOG_PROTO_IN contains all the plugins - even inactive ones.
+# This may trigger some unneeded recompilations.
+pandalog.proto: $(PANDALOG_PROTO_IN)
+	$(PROTOPARSE) ../panda_plugins $(@)
 
-pandalog.o: pandalog.c
-	gcc -c pandalog.c -I .. -D PANDALOG_READER  -g -O0
+pandalog.pb-c.c: pandalog.proto
+	$(PROTOCC) --c_out=. $(<)
 
-pandalog_reader.o: pandalog_reader.c
-	gcc -c pandalog_reader.c  -g -O0
+pandalog_pb2.py: pandalog.proto
+	$(PROTOPYC) --python_out=. $(<)
 
-pandalog_reader: pandalog.o pandalog.pb-c.o pandalog_print.o pandalog_reader.o
-	gcc -o pandalog_reader pandalog.o   pandalog.pb-c.o  pandalog_print.o  pandalog_reader.o -L/usr/local/lib -lprotobuf-c -g -O0  -I .. -lz 
+pandalog_reader: $(PANDALOG_COMMON_OBJS) $(PANDALOG_READER_OBJS)
 
+tainted_instr: $(PANDALOG_COMMON_OBJS)
 
+stuw: $(PANDALOG_COMMON_OBJS)
 
 clean:
-	rm pandalog.o   pandalog.pb-c.o  pandalog_print.o  pandalog_reader.o
+	$(RM) $(PANDALOG_COMMON_OBJS) $(PANDALOG_READER_OBJS) $(PANDALOG_CLEAN_EXTRA)
 
