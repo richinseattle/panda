@@ -1,7 +1,9 @@
-#!/usr/bin/python
+#!/usr/bin/env python
 
-import re
+import sys
 import os.path
+import re
+import textwrap
 
 
 def find_message(buf):
@@ -25,16 +27,17 @@ def get_proto_text(filename):
         bar = re.search("^(\s*)$", line)
         if bar:
             continue
-#        print "line=[%s]" % line   
+#        print("line=[%s]" % line)
         buf += line
     return buf
-    
+
 
 def check_blank(buf):
     foo = re.search("^(\s*)$", buf)
     if foo:
         return True
-    return buf.strip() 
+    return buf.strip()
+
 
 def parse_proto_part(buf):
     # find the messages
@@ -42,72 +45,75 @@ def parse_proto_part(buf):
     rests = []
     while True:
         x = find_message(buf)
-        if x is None:       
+        if x is None:
             y = check_blank(buf)
             if not (y is True):
                 rests.append(y)
             break
         (before, message, after) = x
         messages.append(message)
-#        print "message = [%s]" % message
+#        print("message = [%s]" % message)
         y = check_blank(before)
         if not (y is True):
             rests.append(y)
         buf = after
-#        print len(after)
+#        print(len(after))
     return (messages, rests)
 
 
+if __name__ == '__main__':
+    # pproto is not used
+    pproto = textwrap.dedent(
+    """ syntax = "proto2";
+        package panda;
+        message LogEntry {
+        required uint64 pc = 1;
+        required uint64 instr = 2;
+    """)
 
+    messages = []
+    rests = []
 
+    # file locations
+    panda_plugins = sys.argv[1] if len(sys.argv) > 1 else 'panda_plugins'
+    pandalog_proto = sys.argv[2] if len(sys.argv) > 2 else os.path.join('panda', 'pandalog.proto')
+    panda_plugins_config = os.path.join(panda_plugins, 'config.panda')
+    proto_part_format = os.path.join(panda_plugins, '{plugin}', '{plugin}.proto')
 
-pproto = """
-syntax = "proto2";
-package panda;
-message LogEntry {
-required uint64 pc = 1;    
-required uint64 instr = 2;
-"""
+    # read list of active plugins
+    with open(panda_plugins_config, 'r') as pf:
+        active_plugins_filter = lambda s: not s.startswith('#')
+        active_plugins = filter(active_plugins_filter, map(str.strip, pf.readlines()))
 
+    # process proto files
+    for plugin in sorted(active_plugins):
+        proto_part_file = proto_part_format.format(plugin=plugin)
+        if os.path.isfile(proto_part_file):
+            print(proto_part_file)
+            proto_part = get_proto_text(proto_part_file)
+            (m, r) = parse_proto_part(proto_part)
+            messages.extend(m)
+            rests.extend(r)
 
-messages = []
-rests = []
-for plugin in open("panda_plugins/config.panda"):
-    p = plugin.strip()
-    proto_part_file = "panda_plugins/%s/%s.proto" % (p, p)
-    if os.path.isfile(proto_part_file):
-        print proto_part_file
-        proto_part = get_proto_text(proto_part_file)
-        (m, r) = parse_proto_part(proto_part)
-        messages.extend(m)
-        rests.extend(r)
-    
+    # write file
+    with open(pandalog_proto, 'w') as f:
+        # header
+        f.write(textwrap.dedent("""
+            syntax = "proto2";
+            package panda;
 
-f = open("panda/pandalog.proto", "w")
+        """).lstrip())
 
+        # messages
+        f.write('\n'.join(messages))
 
-f.write ("""
-syntax = "proto2";
-package panda;
-
-""")
-
-for message in messages:
-    f.write( message + "\n" )
-
-
-f.write("""
-
-message LogEntry {
-
-required uint64 pc = 1;    
-required uint64 instr = 2;
-
-""")
-
-for line in rests:
-    f.write( line + "\n" )
-
-f.write ("\n}\n" )
-
-f.close()
+        # logentry struct
+        logentry_struct = [
+            '',
+            'message LogEntry {',
+            'required uint64 pc = 1;',
+            'required uint64 instr = 2;',
+        ]
+        logentry_struct.extend(rests)
+        logentry_struct.extend(['}', ''])
+        f.write('\n'.join(logentry_struct))
