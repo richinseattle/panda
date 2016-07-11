@@ -12,6 +12,8 @@
  *
 PANDAENDCOMMENT */
 
+#include <iostream>
+
 extern "C" {
 #define __STDC_FORMAT_MACROS
 #include "config.h"
@@ -426,16 +428,19 @@ bool translate_callback(CPUState *env, target_ulong pc) {
     // Check if the instruction is syscall (0F 05)
     if (buf[0]== 0x0F && buf[1] == 0x05) {
         syscallPCpoints.insert(std::make_pair(pc, panda_current_asid(env)));
+        std::cout << "syscall via syscall" << std::endl;
         return true;
     }
     // Check if the instruction is int 0x80 (CD 80)
     else if (buf[0]== 0xCD && buf[1] == 0x80) {
         syscallPCpoints.insert(std::make_pair(pc, panda_current_asid(env)));
+        std::cout << "syscall via int80" << std::endl;
         return true;
     }
     // Check if the instruction is sysenter (0F 34)
     else if (buf[0]== 0x0F && buf[1] == 0x34) {
         syscallPCpoints.insert(std::make_pair(pc, panda_current_asid(env)));
+        std::cout << "syscall via sysenter" << std::endl;
         return true;
     }
     else {
