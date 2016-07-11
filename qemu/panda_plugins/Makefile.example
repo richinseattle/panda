@@ -9,6 +9,7 @@ include ../panda.mak
 
 # If you need custom CFLAGS or LIBS, set them up here
 # CFLAGS+=
+# CPPFLAGS+=
 # LIBS+=
 
 # Object files comprising the plugin.
