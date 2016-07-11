@@ -4,13 +4,14 @@
 
 #define __STDC_FORMAT_MACROS
 
-
+extern "C" {
 #include <stdio.h>
 #include <stdlib.h>
 #include <stdint.h>
 #include <inttypes.h>
-#include "pandalog.h"
 #include <string.h>
+#include "pandalog.h"
+}
 
 #include <set>
 #include <map>
