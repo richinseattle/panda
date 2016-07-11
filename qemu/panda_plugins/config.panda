@@ -40,6 +40,7 @@ win7x86intro
 memstrings
 asidstory
 file_taint
+file_taint_sink
 win7proc
 ida_taint
 ida_taint2
