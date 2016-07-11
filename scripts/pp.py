@@ -62,14 +62,18 @@ def parse_proto_part(buf):
 
 
 if __name__ == '__main__':
-    # pproto is not used
-    pproto = textwrap.dedent(
-    """ syntax = "proto2";
+    # panda.proto template
+    pandalog_proto_tpl = textwrap.dedent("""
+        syntax = "proto2";
         package panda;
-        message LogEntry {
+
+        {messages}
+        message LogEntry {{
         required uint64 pc = 1;
         required uint64 instr = 2;
-    """)
+        {logentry_fields}
+        }}
+    """).lstrip()
 
     messages = []
     rests = []
@@ -95,25 +99,10 @@ if __name__ == '__main__':
             messages.extend(m)
             rests.extend(r)
 
-    # write file
+    # write pandalog.proto
     with open(pandalog_proto, 'w') as f:
-        # header
-        f.write(textwrap.dedent("""
-            syntax = "proto2";
-            package panda;
+        f.write(pandalog_proto_tpl.format(
+            messages = '\n'.join(messages),
+            logentry_fields = '\n'.join(rests),
+        ))
 
-        """).lstrip())
-
-        # messages
-        f.write('\n'.join(messages))
-
-        # logentry struct
-        logentry_struct = [
-            '',
-            'message LogEntry {',
-            'required uint64 pc = 1;',
-            'required uint64 instr = 2;',
-        ]
-        logentry_struct.extend(rests)
-        logentry_struct.extend(['}', ''])
-        f.write('\n'.join(logentry_struct))
