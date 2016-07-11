@@ -5,7 +5,7 @@ CC=gcc
 CXX=g++
 PROTOCC=protoc-c
 PROTOPYC=protoc
-PROTOPARSE=../pp.py
+PROTOPARSE=../../scripts/pp.py
 
 CPPFLAGS+=-I.. -DPANDALOG_READER
 CFLAGS+=-g -O0
