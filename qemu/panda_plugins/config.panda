@@ -58,3 +58,4 @@ pri_simple
 loaded
 wintrospection
 pri_trace
+syscalls_test
