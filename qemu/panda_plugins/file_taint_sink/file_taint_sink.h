@@ -11,8 +11,10 @@ bool init_plugin(void *);
 void uninit_plugin(void *);
 }
 
+#include <string>
 #include <set>
 #include <unordered_map>
+#include <unordered_set>
 
 // Signatures for utils.cpp.
 uint32_t guest_strncpy(CPUState *env, char *buf, size_t maxlen, target_ulong guest_addr);
@@ -35,6 +37,9 @@ public:
 
 private:
 };
+
+// set of sinks
+typedef std::unordered_set<std::string> SinkSet;
 
 // set of asids
 typedef std::set<target_ulong> AsidSet;

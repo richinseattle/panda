@@ -49,7 +49,8 @@ extern "C" {
 
 // plugin state
 typedef struct {
-	const char *sink_filename;					// log only writes to this file
+	bool track_all;								// ignore set of sinks and track everything
+	SinkSet sinks;								// set of sinks
 	AsidSet asid_fresh;							// asids for which we don't have complete info
 	int n_asid_fresh;							// number of asids for which we don't have complete info
 	ProcessStateMap pmap;						// maps asids to processes
@@ -216,7 +217,19 @@ bool init_plugin(void *self) {
 	panda_cb pcb;
 	panda_arg_list *args = panda_get_args("file_taint_sink");
 
-	fts.sink_filename = panda_parse_string(args, "filename", NULL);
+	const gchar *sinks_str = panda_parse_string(args, "sinks", NULL);
+	if (sinks_str != NULL) {
+		// use "+" to delimit filenames (most other delimiters are already in use)
+		gchar **sinks_lst = g_strsplit_set(sinks_str, "+", -1);
+		for (gchar **s=sinks_lst; *s!=NULL; s++) {
+			fts.sinks.insert(*s);
+		}
+		g_strfreev(sinks_lst);
+	}
+	else {
+		fts.track_all = true;
+	}
+
 	fts.debug = false;
 
 	panda_require("osi");
@@ -248,6 +261,10 @@ bool init_plugin(void *self) {
 
 	pcb.after_PGD_write = asid_change_cb;
 	panda_register_callback(self, PANDA_CB_VMI_PGD_CHANGED, pcb);
+
+	//panda_free_args(panda_arg_list *args);
+	//release memory allocated by panda_get_args
+
 	return true;
 #else
 	std::cerr << DEBUG_PREFIX "only i386 target is supported" << std::endl;
