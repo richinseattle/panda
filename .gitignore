@@ -92,3 +92,7 @@ qemu/panda_plugins/syscalls/gen_default_callbacks.cpp
 qemu/panda_plugins/syscalls/proto_printer.cpp
 
 .gdb_history
+
+*-rr-nondet.log
+*-rr-snp
+*-rr.cmd
