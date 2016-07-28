@@ -73,7 +73,8 @@ union syscall_arg SyscallInfo::get_arg(int n, size_t sz) const {
 		break;
 
 		case SYSCALL_ARG_STR:
-			r.sval = g_strdup(panda_virtual_memory_smart_read(this->env, this->args[n].pval, sz).c_str());
+			r.sval = (gchar *)g_malloc(sz * sizeof(gchar));
+			guest_strncpy(this->env, r.sval, sz, this->args[n].pval);
 		break;
 
 		case SYSCALL_ARG_PTR:

@@ -44,6 +44,8 @@ uint32_t guest_wstrncpy(CPUState *env, char *buf, size_t maxlen, target_ulong gu
  */
 #define SMART_READ_MIN_STRLEN 3
 
+#define GUEST_MAX_FILENAME 256
+
 /*!
  * @brief Provenance output stream.
  */

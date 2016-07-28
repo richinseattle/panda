@@ -267,12 +267,31 @@ void ProcInfo::syscall_end(CPUState *env) {
 	}
 	break;
 
+	case SYSCALL_LINK:
+	case SYSCALL_RENAME:
+	{
+		// Check return status.
+		if (unlikely(rval < 0)) break;
+
+		arg = this->syscall->get_arg(0, GUEST_MAX_FILENAME);
+		gchar *oldpath = arg.sval;
+		arg = this->syscall->get_arg(1, GUEST_MAX_FILENAME);
+		gchar *newpath = arg.sval;
+
+		LOG_INFO("LINK/RENAME %s %s -> %s", this->label().c_str(), newpath, oldpath);
+
+		g_free(oldpath);
+		g_free(newpath);
+	}
+	break;
+
 	case SYSCALL_OTHER:
 		// ignore
+		LOG_INFO("SYSCALL_OTHER complete for %s: %s", this->label().c_str(), this->syscall->get_name());
 	break;
 
 	default:
-		LOG_WARN("%s:No handling for the completed syscall.", this->label().c_str());
+		LOG_WARN("UNHANDLED syscall complete for %s: %s", this->label().c_str(), this->syscall->get_name());
 	break;
 	}
 
