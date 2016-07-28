@@ -33,6 +33,12 @@
 std::string panda_virtual_memory_smart_read(CPUState *env, target_ulong addr, size_t n);
 
 /*!
+ * @brief Simple string copy functions.
+ */
+uint32_t guest_strncpy(CPUState *env, char *buf, size_t maxlen, target_ulong guest_addr);
+uint32_t guest_wstrncpy(CPUState *env, char *buf, size_t maxlen, target_ulong guest_addr);
+
+/*!
  * @brief The number of printable characters at the beginning of a buffer
  * required to treat the buffer as a string.
  */
