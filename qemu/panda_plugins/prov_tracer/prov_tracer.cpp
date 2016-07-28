@@ -191,51 +191,50 @@ int ins_exec_callback(CPUState *env, TARGET_PTR pc) {
 			continue;
 		}
 
-	auto pi_it = pimap.find(_PGD);
-	if (pi_it == pimap.end()) {
-		// This may occur at the beginning of replay.
-		LOG_WARN("No ProcessInfo associated with " TARGET_PTR_FMT ".", _PGD);
-		return 0;
-	}
-	ProcInfo *pi = (*pi_it).second;
+		auto pi_it = pimap.find(_PGD);
+		if (pi_it == pimap.end()) {
+			// This may occur at the beginning of replay.
+			LOG_WARN("No ProcessInfo associated with " TARGET_PTR_FMT ".", _PGD);
+			return 0;
+		}
+		ProcInfo *pi = (*pi_it).second;
 
-	// Update pi with missing info. Can only run in kernel mode.
-	// XXX: We store the task struct address in OsiProc struct.
-	//	Maybe we can use it to update OsiProc at any point in time.
-	if (_IN_KERNEL && pi->is_fresh) {
-		OsiProc *p_update = get_current_process(env);
+		// Update pi with missing info. Can only run in kernel mode.
+		// XXX: We store the task struct address in OsiProc struct.
+		//	Maybe we can use it to update OsiProc at any point in time.
+		if (_IN_KERNEL && pi->is_fresh) {
+			OsiProc *p_update = get_current_process(env);
 
-		g_free(pi->p.name);
-		pi->p.name = g_strdup(p_update->name);
-		pi->is_fresh = false;
+			g_free(pi->p.name);
+			pi->p.name = g_strdup(p_update->name);
+			pi->is_fresh = false;
 
-		free_osiproc(p_update);
-	}
-	else if (!_IN_KERNEL) {
-		// test the new impl
-		/*
-		OsiProc *p_update = get_current_process(env);
-		LOG_INFO("TEST:" TARGET_PTR_FMT ":%s", p->asid, p->name);
-		LOG_INFO("TEST:" TARGET_PTR_FMT ":%s", p_update->asid, p_update->name);
-		free_osiproc(p_update);
-		*/
-	}
+			free_osiproc(p_update);
+		}
+		else if (!_IN_KERNEL) {
+			// test the new impl
+			/*
+			OsiProc *p_update = get_current_process(env);
+			LOG_INFO("TEST:" TARGET_PTR_FMT ":%s", p->asid, p->name);
+			LOG_INFO("TEST:" TARGET_PTR_FMT ":%s", p_update->asid, p_update->name);
+			free_osiproc(p_update);
+			*/
+		}
 
 		switch(ins->opcode) {
-			case distorm::I_SYSENTER:
-		pi->syscall_start(env);
-		break;
-
-			case distorm::I_SYSEXIT:
-		pi->syscall_end(env);
+		case distorm::I_SYSENTER:
+			pi->syscall_start(env);
 			break;
 
-			default:
-		LOG_WARN("Unexpected instrumented instruction: %s", GET_MNEMONIC_NAME(ins->opcode));
+		case distorm::I_SYSEXIT:
+			pi->syscall_end(env);
+			break;
+
+		default:
+			LOG_WARN("Unexpected instrumented instruction: %s", GET_MNEMONIC_NAME(ins->opcode));
 			break;
 		}
-	}
-
+	} /* for all decoded instructions */
 	return 0;
 #else
 	// have the function compiled, although initialization should fail earlier.
