@@ -11,9 +11,11 @@ rpl=vtrip
 
 if [ "$1" != "" ]; then
 	mode="$1"
+	shift
 fi
-if [ "$2" != "" ]; then
-	rpl="$2"
+if [ "$1" != "" ]; then
+	rpl="$1"
+	shift
 fi
 
 # qemu paths
@@ -30,23 +32,29 @@ fi
 
 echo "QEMU: $qemu"
 echo "LD_LIBRARY_PATH: $LD_LIBRARY_PATH"
-echo "LD_LIBRARY_PATH: $DISPLAY"
+echo "DISPLAY: $DISPLAY"
 echo "VM: $(basename "$dsk") ${mem}MB $os"
 
 if [ "$mode" = "record" ]; then
 	echo ""
-	$qemu -m "$mem" -hda "$dsk" -monitor stdio $redir
+	echo $qemu -m "$mem" -hda "$dsk" -monitor stdio $redir
 
 elif [ "$mode" = "replay" ]; then
 	echo "REPLAY: $rpl"
 	echo ""
-	$qemu -m "$mem" -hda "$dsk" -replay "$rpl" -os "$os" \
+	$qemu -m "$mem" -hda "$dsk" -display none -replay "$rpl" -os "$os" $*
+
+elif [ "$mode" = "test" ]; then
+	echo "REPLAY: $rpl"
+	echo ""
+	$qemu -m "$mem" -hda "$dsk" -display none -replay "$rpl" -os "$os" \
 		-panda osi \
 		-panda syscalls2:profile=linux_x86 \
-		-panda file_taint:filename=hello.txt \
-		-panda file_taint_sink:sink=hellov.txt+lol.txt \
+		-panda file_taint:filename=index.html \
+		-panda file_taint_sink:sink=index.html \
+		#-panda file_taint:filename=hello.txt \
+		#-panda file_taint_sink:sink=hellov.txt+lol.txt \
 		#-pandalog hello.plog
-
 else
 	echo "Invalid mode."
 	exit 1
