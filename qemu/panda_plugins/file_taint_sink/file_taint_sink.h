@@ -25,6 +25,8 @@ Addr make_maddr(uint64_t a); // also in taint2.h and taint_processor.cpp
 #define LOG_PREFIX PP_NAME ": "
 #define DEBUG_PREFIX std::dec << __FILE__ << ":" << __FUNCTION__ << ":" << __LINE__ << ": "
 
+#define GUEST_MAX_FILENAME 256
+
 // process state and asid map
 class ProcessState {
 public:

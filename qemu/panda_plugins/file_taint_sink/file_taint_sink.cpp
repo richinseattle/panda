@@ -51,6 +51,7 @@ extern "C" {
 typedef struct {
 	bool track_all;								// ignore set of sinks and track everything
 	SinkSet sinks;								// set of sinks
+	//sinkfds									// set of pid:fd pairs to watch
 	AsidSet asid_fresh;							// asids for which we don't have complete info
 	int n_asid_fresh;							// number of asids for which we don't have complete info
 	ProcessStateMap pmap;						// maps asids to processes
@@ -178,6 +179,7 @@ void linux_write_return(CPUState* env, target_ulong pc, uint32_t fd, uint32_t bu
 		" fd="	<< fd << 
 		" buf=" << std::hex << buf <<
 		" count=" << std::dec << count <<
+		" count2=" << std::dec << env->regs[R_EAX] <<
 		")";
 	for (uint32_t i=0; i<count; i++) {
 		//uint8_t c;
@@ -188,6 +190,59 @@ void linux_write_return(CPUState* env, target_ulong pc, uint32_t fd, uint32_t bu
 	std::cout << std::endl;
 
 	//std::cout << DEBUG_PREFIX << fd << ":" << std::hex << buf << ":" << std::dec << count << ":" << env->regs[R_EAX] << std::endl;
+}
+
+
+void linux_open_return(CPUState* env, target_ulong pc, uint32_t filename, int32_t flags, int32_t mode) {
+	// check return value
+	int32_t fd = env->regs[R_EAX];
+	if (fd < 0) return;
+
+	// get process
+	target_ulong asid = panda_current_asid(env);
+	auto ps_it = fts.pmap.find(asid);
+	if (ps_it == fts.pmap.end()) {
+		std::cout << DEBUG_PREFIX "No process for asid: " << std::hex << asid << std::dec << std::endl;
+		return;
+	}
+	ProcessState *ps = ps_it->second;
+
+	// resolve returned fd
+	char *filename_real = osi_linux_fd_to_filename(env, ps->p, fd);
+
+	// get filename from open arguments
+	gchar *filename_arg = (gchar *)g_malloc(GUEST_MAX_FILENAME * sizeof(gchar));
+	guest_strncpy(env, filename_arg, GUEST_MAX_FILENAME, filename);
+
+	// look for file in the sinks
+	gchar *basename = NULL;
+	bool watch = false;
+
+	// look if real filename is in the sink set
+	// note: real filename may not be available (delayed kernel structure update?)
+	//       or different from arg filename (symlink). this means that in some corner
+	//       cases, we may miss a file we want to watch.
+	if (filename_real != NULL) {
+	    basename = g_path_get_basename(filename_real);
+	    if (fts.sinks.find(basename) != fts.sinks.end()) { watch = true; }
+	    else { g_free(basename); }
+	}
+
+	// look for argument filename in the sink set
+	if (! watch) {
+	    basename = g_path_get_basename(filename_arg);
+	    if (fts.sinks.find(basename) != fts.sinks.end()) { watch = true; }
+	    else { g_free(basename); }
+	}
+
+	if (watch) {
+	    gchar *f = filename_real != NULL ? filename_real : filename_arg;
+	    std::cout << DEBUG_PREFIX << "WWWWWWWWWWWWWWWWWWWWWWWWWWWWWWWWWWWWWWWWWWWWWWWWW " << f << std::endl;
+	    g_free(basename);
+	}
+
+	g_free(filename_real);
+	g_free(filename_arg);
 }
 #endif /* TARGET_I386 */
 
@@ -217,14 +272,14 @@ bool init_plugin(void *self) {
 	panda_cb pcb;
 	panda_arg_list *args = panda_get_args("file_taint_sink");
 
-	const gchar *sinks_str = panda_parse_string(args, "sinks", NULL);
-	if (sinks_str != NULL) {
+	const gchar *sink_str = panda_parse_string(args, "sink", NULL);
+	if (sink_str != NULL) {
 		// use "+" to delimit filenames (most other delimiters are already in use)
-		gchar **sinks_lst = g_strsplit_set(sinks_str, "+", -1);
-		for (gchar **s=sinks_lst; *s!=NULL; s++) {
+		gchar **sink_lst = g_strsplit_set(sink_str, "+", -1);
+		for (gchar **s=sink_lst; *s!=NULL; s++) {
 			fts.sinks.insert(*s);
 		}
-		g_strfreev(sinks_lst);
+		g_strfreev(sink_lst);
 	}
 	else {
 		fts.track_all = true;
@@ -241,6 +296,8 @@ bool init_plugin(void *self) {
 			assert(init_osi_linux_api());
 			PPP_REG_CB("syscalls2", on_sys_write_enter, linux_write_enter);
 			PPP_REG_CB("syscalls2", on_sys_write_return, linux_write_return);
+			//PPP_REG_CB("syscalls2", on_sys_open_enter, linux_open_enter);
+			PPP_REG_CB("syscalls2", on_sys_open_return, linux_open_return);
 		break;
 
 		case OST_UNKNOWN:
@@ -272,6 +329,8 @@ bool init_plugin(void *self) {
 #endif
 }
 
+//char *f = osi_linux_fd_to_filename(env, &ps, fd);
+//uint64_t pos = osi_linux_fd_to_pos(env, &ps, fd);
 
 void uninit_plugin(void *self) {
 }
