@@ -93,7 +93,7 @@ inline bool update_fresh_processes(CPUState* env, plugin_state* fts) {
 
 int asid_change_cb(CPUState *env, target_ulong oldval, target_ulong newval) {
 	bool updated = update_fresh_processes(env, &fts);
-	std::cout << DEBUG_PREFIX << "updated=" << updated << std::endl;
+	if (fts.debug) { std::cout << DEBUG_PREFIX << "updated=" << updated << std::endl; }
 
 	// current process was in the fresh list - return
 	if (updated) return 0;
@@ -128,58 +128,50 @@ int asid_change_cb(CPUState *env, target_ulong oldval, target_ulong newval) {
 
 
 #ifdef TARGET_I386
-void linux_write_enter(CPUState* env, target_ulong pc, uint32_t fd, uint32_t buf, uint32_t count) {
-	target_ulong asid = panda_current_asid(env);
-	std::cout << DEBUG_PREFIX << "asid=0x" << std::hex << asid << std::endl;
+void linux_write_return(CPUState* env, target_ulong pc, uint32_t fd, uint32_t buf, uint32_t count) {
+	// check return value
+	ssize_t nwritten = env->regs[R_EAX];
+	if (nwritten <= 0) return;
 
-#if 0
-	char *filename = osi_linux_fd_to_filename(env, proc, fd);
-	if (filename == NULL) {
-		std::cerr << DEBUG_PREFIX "couldn't get filename" << std::endl;
-		free_osiproc(proc);
+	// get process
+	target_ulong asid = panda_current_asid(env);
+	auto ps_it = fts.pmap.find(asid);
+	if (ps_it == fts.pmap.end()) {
+		std::cout << DEBUG_PREFIX "No process for asid: " << std::hex << asid << std::dec << std::endl;
 		return;
 	}
-
-	for (uint32_t i=0; i<count; i++) {
-		uint8_t c;
-		uint32_t pa = panda_virt_to_phys(env, buf+i);
-
-		std::cout << DEBUG_PREFIX "w(" <<
-			" pid="	<< proc->pid << "[" << proc->name << "]" <<
-			" fd="	<< fd << "[" << filename << "]" <<
-			std::endl << std::flush;
-
-		//std::cout << ":0x" << std::hex << buf;
-		//std::cout << ":" << std::dec << count << std::endl;
-		panda_virtual_memory_rw(env, buf+i, &c, 1, 0);
-		std::cout << c << ":" << taint2_query(make_maddr(pa)) << std::endl;
-	}
-
-	g_free(filename);
-	free_osiproc(proc);
-	return;
-	std::cout << DEBUG_PREFIX << fd << ":" << std::hex << buf << ":" << std::dec << count << std::endl;
-#endif
-}
-
-void linux_write_return(CPUState* env, target_ulong pc, uint32_t fd, uint32_t buf, uint32_t count) {
-	target_ulong asid = panda_current_asid(env);
-	std::cout << DEBUG_PREFIX << "asid=0x" << std::hex << asid << std::endl;
-
-	auto ps_it = fts.pmap.find(asid);
-
-	if (ps_it == fts.pmap.end()) {std::cout << DEBUG_PREFIX "nope!" << std::endl; return;}
-	assert(ps_it != fts.pmap.end());
-
 	ProcessState *ps = ps_it->second;
 
+	// check filename
+	bool watched = false;
+	char *filename_real = osi_linux_fd_to_filename(env, ps->p, fd);
+	if (fts.track_all) {
+		watched = true;
+	}
+	else if (filename_real == NULL) {
+		watched = false;
+	}
+	else {
+		// try basename
+	    gchar *basename = g_path_get_basename(filename_real);
+		watched = (fts.sinks.find(basename) != fts.sinks.end());
+		g_free(basename);
+
+		// try full name
+		if (!watched) {
+			watched = (fts.sinks.find(filename_real) != fts.sinks.end());
+		}
+	}
+	if (!watched) goto end;
+
+	// watched filename - log
 	std::cout << DEBUG_PREFIX "w(" <<
 		"p=" << ps->p->name <<
 		" pid=" << ps->p->pid <<
 		" fd="	<< fd << 
 		" buf=" << std::hex << buf <<
 		" count=" << std::dec << count <<
-		" count2=" << std::dec << env->regs[R_EAX] <<
+		" nwritten=" << std::dec << nwritten <<
 		")";
 	for (uint32_t i=0; i<count; i++) {
 		//uint8_t c;
@@ -189,10 +181,16 @@ void linux_write_return(CPUState* env, target_ulong pc, uint32_t fd, uint32_t bu
 	}
 	std::cout << std::endl;
 
-	//std::cout << DEBUG_PREFIX << fd << ":" << std::hex << buf << ":" << std::dec << count << ":" << env->regs[R_EAX] << std::endl;
+end:
+	g_free(filename_real);
 }
 
 
+#if 0
+// +++ this callback checks whether the <pid, fd> pair should be watched.
+// +++ this can help avoid doing fd->filename resolution on each write.
+// +++ but for this to work properly, we need to handle clone/fork etc.
+// +++ until then, the code stays commented.
 void linux_open_return(CPUState* env, target_ulong pc, uint32_t filename, int32_t flags, int32_t mode) {
 	// check return value
 	int32_t fd = env->regs[R_EAX];
@@ -238,32 +236,15 @@ void linux_open_return(CPUState* env, target_ulong pc, uint32_t filename, int32_
 	if (watch) {
 	    gchar *f = filename_real != NULL ? filename_real : filename_arg;
 	    std::cout << DEBUG_PREFIX << "WWWWWWWWWWWWWWWWWWWWWWWWWWWWWWWWWWWWWWWWWWWWWWWWW " << f << std::endl;
+	    // +++ Add to watched set of <pid, fd> pairs.
 	    g_free(basename);
 	}
 
 	g_free(filename_real);
 	g_free(filename_arg);
 }
+#endif
 #endif /* TARGET_I386 */
-
-
-
-int block_exec_cb(CPUState *env, TranslationBlock *tb) {
-	if (!panda_in_kernel(env)) {
-		std::cout << DEBUG_PREFIX << "block changed but not in kernel mode" << std::endl;
-		return 0;
-	}
-
-	OsiProc *p = get_current_process(env);
-	if (p == NULL) {
-		std::cout << DEBUG_PREFIX << "failed to get process" << std::endl;
-		return 0;
-	}
-
-	std::cout << DEBUG_PREFIX << "EXE " << p->name << "[" << p->pid << "]" << std::endl;
-	free_osiproc(p);
-	return 0;
-}
 
 
 bool init_plugin(void *self) {
@@ -284,7 +265,6 @@ bool init_plugin(void *self) {
 	else {
 		fts.track_all = true;
 	}
-
 	fts.debug = false;
 
 	panda_require("osi");
@@ -294,10 +274,8 @@ bool init_plugin(void *self) {
 		case OST_LINUX:
 			panda_require("osi_linux");
 			assert(init_osi_linux_api());
-			PPP_REG_CB("syscalls2", on_sys_write_enter, linux_write_enter);
 			PPP_REG_CB("syscalls2", on_sys_write_return, linux_write_return);
-			//PPP_REG_CB("syscalls2", on_sys_open_enter, linux_open_enter);
-			PPP_REG_CB("syscalls2", on_sys_open_return, linux_open_return);
+			//PPP_REG_CB("syscalls2", on_sys_open_return, linux_open_return);
 		break;
 
 		case OST_UNKNOWN:
@@ -312,9 +290,6 @@ bool init_plugin(void *self) {
 	}
 	panda_require("taint2");
 	assert(init_taint2_api());
-
-	//pcb.before_block_exec = block_exec_cb;
-	//panda_register_callback(self, PANDA_CB_BEFORE_BLOCK_EXEC, pcb);
 
 	pcb.after_PGD_write = asid_change_cb;
 	panda_register_callback(self, PANDA_CB_VMI_PGD_CHANGED, pcb);
