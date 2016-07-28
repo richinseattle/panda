@@ -27,7 +27,8 @@ SYSCALLENTS_DL=$(foreach f,\
 PLUGIN_OBJFILES=$(PLUGIN_OBJ_DIR)/$(PLUGIN_NAME).o\
 				$(PLUGIN_OBJ_DIR)/process_info.o\
 				$(PLUGIN_OBJ_DIR)/syscall_info.o\
-				$(PLUGIN_OBJ_DIR)/file_info.o
+				$(PLUGIN_OBJ_DIR)/file_info.o \
+				$(PLUGIN_OBJ_DIR)/utils.o
 
 .PHONY: all
 
