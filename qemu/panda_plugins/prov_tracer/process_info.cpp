@@ -273,15 +273,26 @@ void ProcInfo::syscall_end(CPUState *env) {
 		// Check return status.
 		if (unlikely(rval < 0)) break;
 
+		// Make local FileInfo objects to emit provenance.
 		arg = this->syscall->get_arg(0, GUEST_MAX_FILENAME);
-		gchar *oldpath = arg.sval;
+		FileInfo *oldpath = new FileInfo(arg.sval, 0);
 		arg = this->syscall->get_arg(1, GUEST_MAX_FILENAME);
-		gchar *newpath = arg.sval;
+		FileInfo *newpath = new FileInfo(arg.sval, 0);
 
-		LOG_INFO("LINK/RENAME %s %s -> %s", this->label().c_str(), newpath, oldpath);
+		PROVLOG_F2F(this, newpath, oldpath, 'd');
+		PROVLOG_P2F(this, newpath, 'g');
+		LOG_INFO("%s: %s oldpath=%s newpath=%s", this->label().c_str(), this->syscall->get_name(), oldpath->name(), newpath->name());
 
-		g_free(oldpath);
-		g_free(newpath);
+		if (oldpath->name()[0] != '/' || newpath->name()[0] != '/') {
+			// XXX: Use introspection to get cwd?
+			LOG_WARN("%s: %s (!!!relative paths!!!) oldpath=%s newpath=%s", this->label().c_str(), this->syscall->get_name(), oldpath->name(), newpath->name());
+		}
+		else {
+			LOG_INFO("%s: %s oldpath=%s newpath=%s", this->label().c_str(), this->syscall->get_name(), oldpath->name(), newpath->name());
+		}
+
+		delete oldpath;
+		delete newpath;
 	}
 	break;
 
