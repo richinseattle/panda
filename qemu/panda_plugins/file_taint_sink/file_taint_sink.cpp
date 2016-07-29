@@ -43,9 +43,11 @@ extern "C" {
 #include "file_taint_sink.h"
 
 #include <iostream>
+#include <fstream>
 #include <string>
 #include <unordered_map>
 #include <unordered_set>
+#include <ctime>
 
 // plugin state
 typedef struct {
@@ -56,6 +58,7 @@ typedef struct {
 	int n_asid_fresh;							// number of asids for which we don't have complete info
 	ProcessStateMap pmap;						// maps asids to processes
 	bool debug;									// debug mode
+	std::ofstream taint_out;					// taint output stream
 } plugin_state;
 
 // globals
@@ -132,6 +135,7 @@ void linux_write_return(CPUState* env, target_ulong pc, uint32_t fd, uint32_t bu
 	// check return value
 	ssize_t nwritten = env->regs[R_EAX];
 	if (nwritten <= 0) return;
+	uint32_t taint_count = 0;
 
 	// get process
 	target_ulong asid = panda_current_asid(env);
@@ -164,22 +168,23 @@ void linux_write_return(CPUState* env, target_ulong pc, uint32_t fd, uint32_t bu
 	}
 	if (!watched) goto end;
 
-	// watched filename - log
-	std::cout << DEBUG_PREFIX "w(" <<
-		"p=" << ps->p->name <<
-		" pid=" << ps->p->pid <<
-		" fd="	<< fd << 
-		" buf=" << std::hex << buf <<
-		" count=" << std::dec << count <<
-		" nwritten=" << std::dec << nwritten <<
-		")";
-	for (uint32_t i=0; i<count; i++) {
+	for (uint32_t i=0; i<nwritten; i++) {
 		//uint8_t c;
 		//panda_virtual_memory_rw(env, buf+i, &c, 1, 0);
 		uint32_t pa = panda_virt_to_phys(env, buf+i);
 		std::cout << " " << taint2_query(make_maddr(pa));
 	}
 	std::cout << std::endl;
+
+	// watched filename - log
+	std::cout << DEBUG_PREFIX "w(" <<
+		"p=" << ps->p->name <<
+		" pid=" << ps->p->pid <<
+		" fd="	<< fd << 
+		" buf=" << std::hex << buf <<
+		" nwritten=" << std::dec << nwritten <<
+		" taint_count=" << std::dec << taint_count <<
+	")";
 
 end:
 	g_free(filename_real);
@@ -253,6 +258,7 @@ bool init_plugin(void *self) {
 	panda_cb pcb;
 	panda_arg_list *args = panda_get_args("file_taint_sink");
 
+	const gchar *taint_out = panda_parse_string(args, "taint_out", "taint.log");
 	const gchar *sink_str = panda_parse_string(args, "sink", NULL);
 	if (sink_str != NULL) {
 		// use "+" to delimit filenames (most other delimiters are already in use)
@@ -297,6 +303,10 @@ bool init_plugin(void *self) {
 	//panda_free_args(panda_arg_list *args);
 	//release memory allocated by panda_get_args
 
+	fts.taint_out.open(taint_out, std::ofstream::trunc);
+	std::time_t start_time = std::time(NULL);
+	fts.taint_out << "# " << std::ctime(&start_time);
+
 	return true;
 #else
 	std::cerr << DEBUG_PREFIX "only i386 target is supported" << std::endl;
@@ -308,6 +318,9 @@ bool init_plugin(void *self) {
 //uint64_t pos = osi_linux_fd_to_pos(env, &ps, fd);
 
 void uninit_plugin(void *self) {
+	std::time_t end_time = std::time(NULL);
+	fts.taint_out << "# " << std::ctime(&end_time);
+	fts.taint_out.close();
 }
 
 /* vim:set tabstop=4 softtabstop=4 noexpandtab */

@@ -24,6 +24,7 @@ Addr make_maddr(uint64_t a); // also in taint2.h and taint_processor.cpp
 #define PP_NAME "file_taint_sink"
 #define LOG_PREFIX PP_NAME ": "
 #define DEBUG_PREFIX std::dec << __FILE__ << ":" << __FUNCTION__ << ":" << __LINE__ << ": "
+#define TAINT_PREFIX std::dec << "__TAINT__:"
 
 #define GUEST_MAX_FILENAME 256
 
