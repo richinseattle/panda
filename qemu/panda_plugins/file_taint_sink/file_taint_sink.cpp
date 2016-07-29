@@ -143,6 +143,7 @@ void linux_write_return(CPUState* env, target_ulong pc, uint32_t fd, uint32_t bu
 	ssize_t nwritten = env->regs[R_EAX];
 	if (nwritten <= 0) return;
 	uint32_t taint_count = 0;
+	ssize_t fileoffset = 0;
 
 	// get process
 	target_ulong asid = panda_current_asid(env);
@@ -155,32 +156,35 @@ void linux_write_return(CPUState* env, target_ulong pc, uint32_t fd, uint32_t bu
 
 	// check filename
 	bool watched = false;
-	char *filename_real = osi_linux_fd_to_filename(env, ps->p, fd);
+	char *filename = osi_linux_fd_to_filename(env, ps->p, fd);
 	if (fts.track_all) {
 		watched = true;
 	}
-	else if (filename_real == NULL) {
+	else if (filename == NULL) {
 		watched = false;
 	}
 	else {
 		// try basename
-	    gchar *basename = g_path_get_basename(filename_real);
+	    gchar *basename = g_path_get_basename(filename);
 		watched = (fts.sinks.find(basename) != fts.sinks.end());
 		g_free(basename);
 
 		// try full name
 		if (!watched) {
-			watched = (fts.sinks.find(filename_real) != fts.sinks.end());
+			watched = (fts.sinks.find(filename) != fts.sinks.end());
 		}
 	}
 	if (!watched) goto end;
 
-	if (filename_real == NULL) {
-		filename_real = g_strdup_printf("(%s~%d,%d)", ps->p->name, (int)ps->p->pid, (int)fd);
+	if (filename == NULL) {
+		filename = g_strdup_printf("(%s~%d,%d)", ps->p->name, (int)ps->p->pid, (int)fd);
 	}
-	if (fts.taint_count.find(filename_real) == fts.taint_count.end()) {
-		fts.taint_count[filename_real] = 0;
+	if (fts.taint_count.find(filename) == fts.taint_count.end()) {
+		fts.taint_count[filename] = 0;
 	}
+
+	fileoffset = osi_linux_fd_to_pos(env, ps->p, fd);
+	if (fileoffset > 0) { fileoffset -= nwritten; }
 
 	if (taint2_enabled()) {
 		uint32_t pa;	// physical address
@@ -206,8 +210,12 @@ void linux_write_return(CPUState* env, target_ulong pc, uint32_t fd, uint32_t bu
 			if (last_clean == i-1 && last_clean > 0) {
 				if (i-last_tainted > 5) {
 					gchar *s = g_strndup((gchar *)&b[last_tainted+1], i-last_tainted-1);
-					std::cout << DEBUG_PREFIX << "cleanw(" <<
-					last_tainted+1 << ":" << i-1 << ")=" << s <<
+
+					std::cout << DEBUG_PREFIX << "clean_write(" <<
+						" off="	<< fileoffset+last_tainted+1 << 
+						" buf=" << std::hex << buf << std::dec <<
+						" rng=" << last_tainted+1 << ":" << i-1 <<
+						" )=" << s <<
 					std::endl;
 					g_free(s);
 				}
@@ -216,14 +224,14 @@ void linux_write_return(CPUState* env, target_ulong pc, uint32_t fd, uint32_t bu
 			last_tainted = i;
 			taint_count++;
 
-			fts.taint_out << TAINT_PREFIX << filename_real << ":" << i;
+			fts.taint_out << TAINT_PREFIX << filename << ":" << i;
 			fts.taint_out << ":" << std::hex << b[i] << std::dec;
 			fts.taint_out << ":" << tc << "=";
 			taint2_labelset_ram_iter(pa, label_process, NULL);
 			fts.taint_out << std::endl;
 		}
 		g_free(b);
-		fts.taint_count[filename_real] += taint_count;
+		fts.taint_count[filename] += taint_count;
 		fts.taint_out << std::flush;
 	}
 
@@ -232,17 +240,18 @@ void linux_write_return(CPUState* env, target_ulong pc, uint32_t fd, uint32_t bu
 		"p=" << ps->p->name <<
 		" pid=" << ps->p->pid <<
 		" fd="	<< fd << 
+		" off="	<< fileoffset << 
 		" buf=" << std::hex << buf <<
 		" nwritten=" << std::dec << nwritten <<
 		" taint_count=" << std::dec << taint_count << ")" <<
 	std::endl;
 
-	// we print here because uninit sometimes doesn't run if trace has been trimmed with scissors
-	std::cout << "--------------------------------------------------------------------" << std::endl;
-	for (auto tc : fts.taint_count) { std::cout << DEBUG_PREFIX << tc.first << ":" << tc.second << std::endl; }
-	std::cout << "--------------------------------------------------------------------" << std::endl;
+	// uncomment this if the trace doesn't run to its end (can happen with plugins trimmed with scissors)
+	//std::cout << "--------------------------------------------------------------------" << std::endl;
+	//for (auto tc : fts.taint_count) { std::cout << DEBUG_PREFIX << tc.first << ":" << tc.second << std::endl; }
+	//std::cout << "--------------------------------------------------------------------" << std::endl;
 end:
-	g_free(filename_real);
+	g_free(filename);
 }
 
 
@@ -373,6 +382,10 @@ bool init_plugin(void *self) {
 //uint64_t pos = osi_linux_fd_to_pos(env, &ps, fd);
 
 void uninit_plugin(void *self) {
+	std::cout << "--------------------------------------------------------------------" << std::endl;
+	for (auto tc : fts.taint_count) { std::cout << DEBUG_PREFIX << tc.first << ":" << tc.second << std::endl; }
+	std::cout << "--------------------------------------------------------------------" << std::endl;
+
 	std::time_t end_time = std::time(NULL);
 	fts.taint_out << "# " << std::ctime(&end_time);
 	fts.taint_out.close();
