@@ -48,6 +48,7 @@ extern "C" {
 #include <unordered_map>
 #include <unordered_set>
 #include <ctime>
+#include <iomanip>
 
 // plugin state
 typedef struct {
@@ -59,6 +60,7 @@ typedef struct {
 	ProcessStateMap pmap;						// maps asids to processes
 	bool debug;									// debug mode
 	std::ofstream taint_out;					// taint output stream
+	TaintCountMap taint_count;
 } plugin_state;
 
 // globals
@@ -131,6 +133,11 @@ int asid_change_cb(CPUState *env, target_ulong oldval, target_ulong newval) {
 
 
 #ifdef TARGET_I386
+static int label_process(uint32_t el, void *sup) {
+	fts.taint_out << " " << el;
+	return 0; // continues with next label
+}
+
 void linux_write_return(CPUState* env, target_ulong pc, uint32_t fd, uint32_t buf, uint32_t count) {
 	// check return value
 	ssize_t nwritten = env->regs[R_EAX];
@@ -168,13 +175,57 @@ void linux_write_return(CPUState* env, target_ulong pc, uint32_t fd, uint32_t bu
 	}
 	if (!watched) goto end;
 
-	for (uint32_t i=0; i<nwritten; i++) {
-		//uint8_t c;
-		//panda_virtual_memory_rw(env, buf+i, &c, 1, 0);
-		uint32_t pa = panda_virt_to_phys(env, buf+i);
-		std::cout << " " << taint2_query(make_maddr(pa));
+	if (filename_real == NULL) {
+		filename_real = g_strdup_printf("(%s~%d,%d)", ps->p->name, (int)ps->p->pid, (int)fd);
 	}
-	std::cout << std::endl;
+	if (fts.taint_count.find(filename_real) == fts.taint_count.end()) {
+		fts.taint_count[filename_real] = 0;
+	}
+
+	if (taint2_enabled()) {
+		uint32_t pa;	// physical address
+		uint32_t tc;	// taint cardinality
+		uint8_t *b = NULL;
+		int32_t last_tainted = -1;
+		int32_t last_clean = -1;
+
+		for (int32_t i=0; i<nwritten; i++) {
+			pa = panda_virt_to_phys(env, buf+i);
+			tc = taint2_query_ram(pa);
+			if (tc == 0) {
+				last_clean = i;
+				continue;
+			}
+
+			if (b == NULL) {
+				b = (uint8_t *)g_malloc(nwritten * sizeof(uint8_t));
+				panda_virtual_memory_rw(env, buf, b, nwritten * sizeof(uint8_t), 0);
+			}
+
+			// print islands of non tainted bytes among tainted bytes
+			if (last_clean == i-1 && last_clean > 0) {
+				if (i-last_tainted > 5) {
+					gchar *s = g_strndup((gchar *)&b[last_tainted+1], i-last_tainted-1);
+					std::cout << DEBUG_PREFIX << "cleanw(" <<
+					last_tainted+1 << ":" << i-1 << ")=" << s <<
+					std::endl;
+					g_free(s);
+				}
+			}
+
+			last_tainted = i;
+			taint_count++;
+
+			fts.taint_out << TAINT_PREFIX << filename_real << ":" << i;
+			fts.taint_out << ":" << std::hex << b[i] << std::dec;
+			fts.taint_out << ":" << tc << "=";
+			taint2_labelset_ram_iter(pa, label_process, NULL);
+			fts.taint_out << std::endl;
+		}
+		g_free(b);
+		fts.taint_count[filename_real] += taint_count;
+		fts.taint_out << std::flush;
+	}
 
 	// watched filename - log
 	std::cout << DEBUG_PREFIX "w(" <<
@@ -183,9 +234,13 @@ void linux_write_return(CPUState* env, target_ulong pc, uint32_t fd, uint32_t bu
 		" fd="	<< fd << 
 		" buf=" << std::hex << buf <<
 		" nwritten=" << std::dec << nwritten <<
-		" taint_count=" << std::dec << taint_count <<
-	")";
+		" taint_count=" << std::dec << taint_count << ")" <<
+	std::endl;
 
+	// we print here because uninit sometimes doesn't run if trace has been trimmed with scissors
+	std::cout << "--------------------------------------------------------------------" << std::endl;
+	for (auto tc : fts.taint_count) { std::cout << DEBUG_PREFIX << tc.first << ":" << tc.second << std::endl; }
+	std::cout << "--------------------------------------------------------------------" << std::endl;
 end:
 	g_free(filename_real);
 }

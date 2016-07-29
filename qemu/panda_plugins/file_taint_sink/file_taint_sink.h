@@ -49,4 +49,6 @@ typedef std::set<target_ulong> AsidSet;
 
 // maps asid to process state
 typedef std::unordered_map<target_ulong, ProcessState*> ProcessStateMap;
+
+typedef std::unordered_map<std::string, uint32_t> TaintCountMap;
 #endif
